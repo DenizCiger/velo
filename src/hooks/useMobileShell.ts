@@ -48,6 +48,25 @@ export function useMobileShell(): void {
 
     cleanups.push(initNativeInsets());
 
+    // The Android WebView doesn't resize for the keyboard; once it opens, bring
+    // the focused field into the (now shorter) visible area.
+    let wasOpen = false;
+    const onInsets = (e: Event) => {
+      const ime = (e as CustomEvent<{ ime?: number; bottom?: number }>).detail;
+      const open = (ime?.ime ?? 0) > (ime?.bottom ?? 0);
+      if (open && !wasOpen) {
+        requestAnimationFrame(() => {
+          const el = document.activeElement as HTMLElement | null;
+          if (el && el !== document.body && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) {
+            el.scrollIntoView({ block: "center", behavior: "smooth" });
+          }
+        });
+      }
+      wasOpen = open;
+    };
+    window.addEventListener("velo-native-insets", onInsets);
+    cleanups.push(() => window.removeEventListener("velo-native-insets", onInsets));
+
     const root = document.documentElement;
     const syncBars = () => setSystemBarsDark(root.classList.contains("dark"));
     syncBars();

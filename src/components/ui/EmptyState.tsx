@@ -1,15 +1,17 @@
 import type { LucideIcon } from "lucide-react";
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 
 type EmptyStateProps = {
   title: string;
   subtitle?: string;
+  /** Optional call to action rendered under the text */
+  action?: ReactNode;
 } & (
   | { icon: LucideIcon; illustration?: never }
   | { illustration: ComponentType<{ size?: number; className?: string }>; icon?: never }
 );
 
-export function EmptyState({ title, subtitle, ...rest }: EmptyStateProps) {
+export function EmptyState({ title, subtitle, action, ...rest }: EmptyStateProps) {
   return (
     <div className="flex flex-col items-center justify-center h-full text-text-tertiary px-4">
       {"illustration" in rest && rest.illustration ? (
@@ -19,6 +21,7 @@ export function EmptyState({ title, subtitle, ...rest }: EmptyStateProps) {
       ) : null}
       <p className="text-sm font-medium">{title}</p>
       {subtitle && <p className="text-xs mt-1 text-center">{subtitle}</p>}
+      {action}
     </div>
   );
 }

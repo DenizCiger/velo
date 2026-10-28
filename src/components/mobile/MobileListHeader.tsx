@@ -131,6 +131,10 @@ export function MobileListHeader({ title, count, unreadCount, readFilter, onRead
             enterKeyHint="search"
             value={searchQuery}
             onChange={(e) => handleChange(e.target.value)}
+            onKeyDown={(e) => {
+              // The keyboard's search key: hide the keyboard, keep the results
+              if (e.key === "Enter") inputRef.current?.blur();
+            }}
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
             placeholder="Search in mail"

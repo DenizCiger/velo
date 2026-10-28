@@ -41,10 +41,10 @@ export function BottomSheet({ open, onClose, title, children, ariaLabel }: Botto
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-[90] flex flex-col justify-end" role="dialog" aria-modal="true" aria-label={ariaLabel}>
+    <div className="fixed inset-x-0 top-0 bottom-[var(--keyboard-inset)] z-[90] flex flex-col justify-end" role="dialog" aria-modal="true" aria-label={ariaLabel}>
       <div className="absolute inset-0 bg-black/40 sheet-scrim" onClick={onClose} />
       <div
-        className="relative sheet-panel bg-bg-primary glass-modal rounded-t-3xl border-t border-border-primary max-h-[85dvh] flex flex-col pb-[var(--safe-bottom)] pl-[var(--safe-left)] pr-[var(--safe-right)]"
+        className="relative sheet-panel bg-surface rounded-t-3xl border-t border-border-primary shadow-[0_-8px_32px_rgba(0,0,0,0.18)] max-h-[85dvh] flex flex-col pb-[var(--safe-bottom)] pl-[var(--safe-left)] pr-[var(--safe-right)]"
         style={dragY ? { transform: `translateY(${dragY}px)`, transition: "none" } : { transition: "transform 200ms var(--ease-out-soft)" }}
       >
         <div

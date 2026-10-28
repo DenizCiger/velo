@@ -711,6 +711,7 @@ export function EmailList({ width, listRef, compact = false }: { width?: number;
           <EmailListSkeleton />
         ) : filteredThreads.length === 0 && bundleRules.length === 0 ? (
           <EmptyStateForContext
+            compact={compact}
             searchQuery={searchQuery}
             activeAccountId={activeAccountId}
             activeLabel={activeLabel}
@@ -807,8 +808,8 @@ export function EmailList({ width, listRef, compact = false }: { width?: number;
 
       {compact && (
         <>
-          {/* Compose FAB — hidden in selection mode, where the bar has the actions */}
-          {multiSelectCount === 0 && (
+          {/* Compose FAB — hidden in selection mode (the bar has the actions) and without an account */}
+          {multiSelectCount === 0 && activeAccountId && (
             <button
               onClick={() => openComposer()}
               className="absolute right-4 bottom-[calc(var(--safe-bottom)+1rem)] z-20 h-14 pl-4 pr-5 rounded-2xl bg-accent text-white shadow-lg shadow-accent/30 flex items-center gap-3 font-medium text-[0.9375rem] active:scale-95 transition-transform"
@@ -834,12 +835,14 @@ export function EmailList({ width, listRef, compact = false }: { width?: number;
 }
 
 function EmptyStateForContext({
+  compact,
   searchQuery,
   activeAccountId,
   activeLabel,
   readFilter,
   activeCategory,
 }: {
+  compact?: boolean;
   searchQuery: string | null;
   activeAccountId: string | null;
   activeLabel: string;
@@ -853,6 +856,23 @@ function EmptyStateForContext({
     return <EmptyState icon={Filter} title={`No ${readFilter} emails`} subtitle="Try changing the filter" />;
   }
   if (!activeAccountId) {
+    if (compact) {
+      return (
+        <EmptyState
+          illustration={NoAccountIllustration}
+          title="No account connected"
+          subtitle="Add a Gmail or IMAP account to get started"
+          action={
+            <button
+              onClick={() => window.dispatchEvent(new Event("velo-open-add-account"))}
+              className="mt-6 h-12 px-6 rounded-full bg-accent text-white text-[0.9375rem] font-medium shadow-lg shadow-accent/25 active:scale-95 transition-transform"
+            >
+              Add account
+            </button>
+          }
+        />
+      );
+    }
     return <EmptyState illustration={NoAccountIllustration} title="No account connected" subtitle="Add a Gmail account to get started" />;
   }
 

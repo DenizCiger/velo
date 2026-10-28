@@ -178,7 +178,10 @@ export default function App() {
     window.addEventListener("velo-toggle-shortcuts-help", toggleHelp);
     window.addEventListener("velo-toggle-ask-inbox", toggleAskInbox);
     window.addEventListener("velo-move-to-folder", handleMoveToFolder);
+    const openAddAccount = () => setShowAddAccount(true);
+    window.addEventListener("velo-open-add-account", openAddAccount);
     return () => {
+      window.removeEventListener("velo-open-add-account", openAddAccount);
       window.removeEventListener("velo-toggle-command-palette", togglePalette);
       window.removeEventListener("velo-toggle-shortcuts-help", toggleHelp);
       window.removeEventListener("velo-toggle-ask-inbox", toggleAskInbox);
