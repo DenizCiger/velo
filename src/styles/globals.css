@@ -42,6 +42,7 @@
  * Dark mode overrides — applied when <html class="dark">
  */
 .dark {
+  color-scheme: dark;
   --color-bg-primary: rgba(15, 23, 42, 0.88);
   --color-bg-secondary: rgba(30, 41, 59, 0.82);
   --color-bg-tertiary: rgba(51, 65, 85, 0.78);
@@ -429,4 +430,10 @@ body {
   .animated-bg {
     display: none;
   }
+}
+
+/* Native <select> popups (WebKitGTK) ignore the translucent theme colors */
+.dark select option {
+  background-color: #1e293b;
+  color: #e5e7eb;
 }

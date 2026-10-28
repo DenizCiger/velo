@@ -80,6 +80,31 @@ pub fn run() {
         .plugin(tauri_plugin_sql::Builder::default().build())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
+        // WebKitGTK refuses to run the parent's click handler inside the sandboxed
+        // email iframe, so links fall through as plain navigations. Catch them here
+        // and hand external URLs to the system browser instead.
+        .plugin(
+            tauri::plugin::Builder::<tauri::Wry, ()>::new("external-links")
+                .on_navigation(|webview, url| {
+                    use tauri_plugin_opener::OpenerExt;
+                    let external = match url.scheme() {
+                        "mailto" | "tel" => true,
+                        "http" | "https" => {
+                            let host = url.host_str().unwrap_or("");
+                            host != "tauri.localhost"
+                                && !(cfg!(debug_assertions)
+                                    && (host == "localhost" || host == "127.0.0.1"))
+                        }
+                        _ => false,
+                    };
+                    if external {
+                        let _ = webview.app_handle().opener().open_url(url.as_str(), None::<&str>);
+                        return false;
+                    }
+                    true
+                })
+                .build(),
+        )
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_http::init())

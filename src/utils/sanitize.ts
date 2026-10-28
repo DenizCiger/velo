@@ -14,7 +14,7 @@ export function sanitizeHtml(html: string): string {
     FORBID_TAGS: ["script", "style", "iframe", "object", "embed", "form"],
     ALLOWED_ATTR: [
       "href", "src", "alt", "title", "width", "height", "class", "style",
-      "target", "rel", "colspan", "rowspan", "cellpadding", "cellspacing",
+      "rel", "colspan", "rowspan", "cellpadding", "cellspacing",
       "border", "align", "valign", "bgcolor", "color", "dir", "lang",
       "data-blocked-src",
     ],
