@@ -5,6 +5,10 @@ import { router } from "./router";
 import ThreadWindow from "./ThreadWindow";
 import ComposerWindow from "./ComposerWindow";
 import "./styles/globals.css";
+import { applyPlatformClasses } from "./utils/platform";
+
+// html.platform-{android,linux,...} + platform-mobile|desktop for CSS
+applyPlatformClasses();
 
 const params = new URLSearchParams(window.location.search);
 const isThreadWindow = params.has("thread") && params.has("account");

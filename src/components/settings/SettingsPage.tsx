@@ -467,6 +467,8 @@ export function SettingsPage() {
                         <option value="dark">Dark</option>
                       </select>
                     </SettingRow>
+                    {/* The phone layout always shows one pane at a time */}
+                    {!compact && (
                     <SettingRow label="Reading pane">
                       <select
                         value={readingPanePosition}
@@ -480,6 +482,7 @@ export function SettingsPage() {
                         <option value="hidden">Off</option>
                       </select>
                     </SettingRow>
+                    )}
                     <SettingRow label="Email density">
                       <select
                         value={emailDensity}
@@ -508,7 +511,7 @@ export function SettingsPage() {
                       </select>
                     </SettingRow>
                     <SettingRow label="Accent color">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 compact:flex-wrap compact:justify-end compact:max-w-[14.5rem] compact:gap-2.5">
                         {COLOR_THEMES.map((t) => {
                           const isSelected = colorTheme === t.id;
                           return (

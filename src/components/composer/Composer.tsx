@@ -548,7 +548,7 @@ export function Composer() {
         {/* Subject */}
         <div className="px-3 py-1.5 border-b border-border-secondary">
           <div className="flex items-center gap-2">
-            <span className="text-xs text-text-tertiary w-8 shrink-0">
+            <span className="text-xs text-text-tertiary w-8 shrink-0 compact:text-sm">
               Sub
             </span>
             <input
@@ -556,7 +556,7 @@ export function Composer() {
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
               placeholder="Subject"
-              className="flex-1 bg-transparent text-sm text-text-primary outline-none placeholder:text-text-tertiary"
+              className="flex-1 bg-transparent text-sm text-text-primary outline-none placeholder:text-text-tertiary compact:text-base compact:min-h-11"
             />
           </div>
         </div>

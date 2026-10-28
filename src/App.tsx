@@ -329,7 +329,8 @@ export default function App() {
 
         // Fetch send-as aliases for each active email account (skip CalDAV-only)
         const activeIds = mapped.filter((a) => a.isActive).map((a) => a.id);
-        const emailAccountIds = mapped.filter((a) => a.isActive && a.provider !== "caldav").map((a) => a.id);
+        // Send-as aliases are a Gmail API feature (IMAP/CalDAV accounts have none)
+        const emailAccountIds = mapped.filter((a) => a.isActive && a.provider !== "caldav" && a.provider !== "imap").map((a) => a.id);
         for (const accountId of emailAccountIds) {
           try {
             const client = await getGmailClient(accountId);
@@ -535,7 +536,7 @@ export default function App() {
       syncAccount(newest.id);
 
       // Fetch send-as aliases in the background (non-blocking, skip CalDAV-only accounts)
-      if (newest.provider !== "caldav") {
+      if (newest.provider !== "caldav" && newest.provider !== "imap") {
         getGmailClient(newest.id)
           .then((client) => fetchSendAsAliases(client, newest.id))
           .catch((err) => console.warn(`Failed to fetch send-as aliases for new account:`, err));
@@ -605,7 +606,7 @@ export default function App() {
       {/* Sync status bar */}
       {syncStatus && (
         <div
-          className={`fixed bottom-0 left-0 right-0 glass-panel text-white text-xs px-4 py-1.5 text-center z-40 animate-[slideUp_200ms_ease-out,fadeIn_200ms_ease-out] compact:bottom-[calc(var(--safe-bottom)+5.5rem)] compact:left-4 compact:right-4 compact:rounded-full compact:py-2 compact:shadow-lg ${
+          className={`fixed bottom-[var(--safe-bottom)] left-0 right-0 glass-panel text-white text-xs px-4 py-1.5 text-center z-40 animate-[slideUp_200ms_ease-out,fadeIn_200ms_ease-out] compact:bottom-[calc(var(--safe-bottom)+1.25rem)] compact:left-4 compact:right-[11rem] compact:rounded-2xl compact:py-2 compact:text-left compact:shadow-lg compact:leading-snug ${
             syncStatus.startsWith("Sync failed") ? "bg-danger/90" : "bg-accent/90"
           }`}
         >

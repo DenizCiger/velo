@@ -92,10 +92,10 @@ export function AddressInput({
 
   return (
     <div className="flex items-start gap-2">
-      <span className="text-xs text-text-tertiary pt-1.5 w-8 shrink-0">
+      <span className="text-xs text-text-tertiary pt-1.5 w-8 shrink-0 compact:text-sm compact:pt-3">
         {label}
       </span>
-      <div className="flex-1 flex flex-wrap items-center gap-1 min-h-[32px] relative">
+      <div className="flex-1 flex flex-wrap items-center gap-1 min-h-[32px] relative compact:min-h-11">
         {addresses.map((addr) => (
           <span
             key={addr}
@@ -124,7 +124,7 @@ export function AddressInput({
           }}
           placeholder={addresses.length === 0 ? placeholder : ""}
           aria-label={label}
-          className="flex-1 min-w-[120px] bg-transparent text-sm text-text-primary outline-none placeholder:text-text-tertiary"
+          className="flex-1 min-w-[120px] bg-transparent text-sm text-text-primary outline-none placeholder:text-text-tertiary compact:text-base"
         />
 
         {/* Autocomplete dropdown */}

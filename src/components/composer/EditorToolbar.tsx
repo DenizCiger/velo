@@ -37,7 +37,7 @@ export function EditorToolbar({ editor, onToggleAiAssist, aiAssistOpen }: Editor
       type="button"
       onClick={onClick}
       title={title ?? label}
-      className={`px-1.5 py-1 text-xs rounded hover:bg-bg-hover transition-colors ${
+      className={`px-1.5 py-1 text-xs rounded hover:bg-bg-hover transition-colors compact:shrink-0 compact:whitespace-nowrap compact:min-h-10 compact:min-w-10 compact:px-2.5 compact:text-sm compact:rounded-lg ${
         isActive ? "bg-bg-hover text-accent font-semibold" : "text-text-secondary"
       }`}
     >
@@ -46,7 +46,7 @@ export function EditorToolbar({ editor, onToggleAiAssist, aiAssistOpen }: Editor
   );
 
   return (
-    <div className="flex items-center gap-0.5 px-3 py-1.5 border-b border-border-secondary bg-bg-secondary flex-wrap">
+    <div className="flex items-center gap-0.5 px-3 py-1.5 border-b border-border-secondary bg-bg-secondary flex-wrap compact:flex-nowrap compact:overflow-x-auto compact:px-1.5 compact:py-1 compact:bg-transparent hide-scrollbar">
       {btn("B", editor.isActive("bold"), () => editor.chain().focus().toggleBold().run(), "Bold (Ctrl+B)")}
       {btn("I", editor.isActive("italic"), () => editor.chain().focus().toggleItalic().run(), "Italic (Ctrl+I)")}
       {btn("U", editor.isActive("underline"), () => editor.chain().focus().toggleUnderline().run(), "Underline (Ctrl+U)")}
@@ -91,7 +91,7 @@ export function EditorToolbar({ editor, onToggleAiAssist, aiAssistOpen }: Editor
           type="button"
           onClick={onToggleAiAssist}
           title="AI Assist"
-          className={`px-1.5 py-1 text-xs rounded hover:bg-bg-hover transition-colors flex items-center gap-1 ${
+          className={`px-1.5 py-1 text-xs rounded hover:bg-bg-hover transition-colors flex items-center gap-1 compact:shrink-0 compact:min-h-10 compact:px-2.5 compact:text-sm ${
             aiAssistOpen ? "bg-accent/10 text-accent font-semibold" : "text-text-secondary"
           }`}
         >

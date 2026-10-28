@@ -1,4 +1,5 @@
 import { useRef, useCallback, useLayoutEffect, useMemo, useState, useEffect } from "react";
+import { useIsCompact } from "@/hooks/useLayoutMode";
 import { ImageOff } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { stripRemoteImages, hasBlockedImages } from "@/utils/imageBlocker";
@@ -33,6 +34,7 @@ export function EmailRenderer({
   const rafRef = useRef<number>(0);
   const [overrideShow, setOverrideShow] = useState(false);
   const [cidMap, setCidMap] = useState<Map<string, string>>(new Map());
+  const fitToWidth = useIsCompact();
 
   const theme = useUIStore((s) => s.theme);
   const isDark = theme === "dark"
@@ -165,12 +167,30 @@ export function EmailRenderer({
     // Calculate and set height synchronously before paint
     const applyHeight = () => {
       if (!doc.body) return;
-      const h = doc.body.scrollHeight;
+      // When fit-to-width zoom is active, measure the zoomed document instead
+      const h = doc.body.style.zoom ? doc.documentElement.scrollHeight : doc.body.scrollHeight;
       if (h > 0) {
         iframe.style.height = h + "px";
       }
     };
+
+    // Phone layout: scale fixed-width HTML (600px newsletters) down to the
+    // screen width instead of clipping it, like mobile mail apps do.
+    const fitToScreen = () => {
+      if (!fitToWidth || !doc.body || isPlainText) return;
+      doc.body.style.zoom = "";
+      const available = iframe.clientWidth;
+      const needed = doc.documentElement.scrollWidth;
+      if (available > 0 && needed > available + 1) {
+        doc.body.style.zoom = String(Math.max(0.35, available / needed));
+      }
+      applyHeight();
+    };
+    fitToScreen();
     applyHeight();
+    if (fitToWidth) {
+      doc.querySelectorAll("img").forEach((img) => img.addEventListener("load", fitToScreen, { once: true }));
+    }
 
     // Watch for dynamic changes (images loading, etc.) — batched with rAF
     const resizeObserver = new ResizeObserver(() => {
@@ -198,7 +218,7 @@ export function EmailRenderer({
       observerRef.current?.disconnect();
       cancelAnimationFrame(rafRef.current);
     };
-  }, [bodyHtml, isDark, isPlainText]);
+  }, [bodyHtml, isDark, isPlainText, fitToWidth]);
 
   const handleLoadImages = useCallback(() => {
     setOverrideShow(true);
