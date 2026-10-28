@@ -30,6 +30,12 @@ let backgroundAccountIds: string[] = [];
 
 const cycleDoneListeners = new Set<() => void>();
 
+/** Error message of the most recent failed account sync in the current cycle, if any. */
+let lastCycleError: string | null = null;
+export function getLastSyncError(): string | null {
+  return lastCycleError;
+}
+
 /** Called after every sync run (all queued accounts done), success or not. */
 export function onSyncCycleDone(cb: () => void): () => void {
   cycleDoneListeners.add(cb);
@@ -258,6 +264,7 @@ async function syncAccountInternal(accountId: string): Promise<void> {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err ?? "Unknown error");
     console.error(`[syncManager] Sync failed for account ${accountId}:`, message);
+    lastCycleError = message;
     statusCallback?.(accountId, "error", undefined, message);
   }
 }
@@ -272,6 +279,7 @@ async function runSync(accountIds: string[]): Promise<void> {
   }
 
   syncPromise = (async () => {
+    lastCycleError = null;
     try {
       for (const id of accountIds) {
         await syncAccountInternal(id);

@@ -6,7 +6,7 @@
  * Desktop/iOS: every export is a no-op.
  */
 import { getSetting, setSetting } from "../db/settings";
-import { onSyncCycleDone, syncAllNow } from "../gmail/syncManager";
+import { getLastSyncError, onSyncCycleDone, syncAllNow } from "../gmail/syncManager";
 import { decideServiceAction } from "./backgroundSyncLogic";
 import {
   getNativeStatus,
@@ -56,7 +56,7 @@ export async function initBackgroundSync(): Promise<void> {
     syncAllNow()
       .catch((err) => console.warn("[backgroundSync] wake-up sync failed:", err))
       .finally(() => {
-        reportSyncDone().catch(() => {});
+        reportSyncDone(getLastSyncError()).catch(() => {});
       });
   });
 
@@ -68,7 +68,7 @@ export async function initBackgroundSync(): Promise<void> {
   });
 
   onSyncCycleDone(() => {
-    if (serviceRunning) reportSyncDone().catch(() => {});
+    if (serviceRunning) reportSyncDone(getLastSyncError()).catch(() => {});
   });
 
   try {

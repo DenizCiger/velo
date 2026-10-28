@@ -37,8 +37,14 @@ const STOPPED: NativeBgSyncStatus = {
 export const startNativeService = () => call<NativeBgSyncStatus>("start", STOPPED);
 export const stopNativeService = () => call<NativeBgSyncStatus>("stop", STOPPED);
 export const getNativeStatus = () => call<NativeBgSyncStatus>("status", STOPPED);
-/** Tell the service a sync cycle finished: releases the alarm wake lock, updates "Last checked". */
-export const reportSyncDone = () => call<void>("sync_done", undefined);
+/** Tell the service a sync cycle finished: releases the alarm wake lock, updates "Last checked". `error` is logged for diagnostics. */
+export const reportSyncDone = (error?: string | null) =>
+  call<void>("sync_done", undefined, error ? { error: sanitizeForLog(error) } : undefined);
+
+/** Error text goes to logcat: drop anything address-like and keep it short. */
+function sanitizeForLog(text: string): string {
+  return text.replace(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g, "<email>").slice(0, 160);
+}
 export const requestIgnoreBatteryOptimizations = () =>
   call<{ opened: boolean }>("request_ignore_battery_optimizations", { opened: false });
 export const openNotificationSettings = () =>

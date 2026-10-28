@@ -18,6 +18,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import app.tauri.annotation.Command
+import app.tauri.annotation.InvokeArg
 import app.tauri.annotation.TauriPlugin
 import app.tauri.plugin.Invoke
 import app.tauri.plugin.JSObject
@@ -162,6 +163,10 @@ class BgSyncPlugin(private val activity: Activity) : Plugin(activity) {
 
   @Command
   fun syncDone(invoke: Invoke) {
+    // Diagnostics only: whether the cycle worked. A background sync that can't
+    // reach Gmail still "finishes", so the heartbeat alone can't tell.
+    val error = runCatching { invoke.parseArgs(SyncDoneArgs::class.java).error }.getOrNull()
+    Log.i(BgSyncService.TAG, if (error.isNullOrEmpty()) "sync cycle finished: ok" else "sync cycle finished: error: $error")
     BgSyncService.onSyncDone(activity.applicationContext)
     invoke.resolve()
   }
@@ -237,4 +242,9 @@ class BgSyncPlugin(private val activity: Activity) : Plugin(activity) {
       .put("manufacturer", Build.MANUFACTURER ?: "")
       .put("sdkInt", Build.VERSION.SDK_INT)
   }
+}
+
+@InvokeArg
+class SyncDoneArgs {
+  var error: String? = null
 }
