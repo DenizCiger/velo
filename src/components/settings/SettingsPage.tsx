@@ -62,6 +62,15 @@ import {
 import { ALL_NAV_ITEMS } from "@/components/layout/Sidebar";
 import type { SidebarNavItem } from "@/stores/uiStore";
 import { Button } from "@/components/ui/Button";
+import { isBackgroundSyncSupported, openAutostartSettings, openNotificationSettings, requestIgnoreBatteryOptimizations, type NativeBgSyncStatus } from "@/services/backgroundSync/nativeBgSync";
+import {
+  BACKGROUND_SYNC_CHANGED_EVENT,
+  getBackgroundSyncStatus,
+  isBackgroundSyncEnabled,
+  setBackgroundSyncEnabled,
+} from "@/services/backgroundSync/backgroundSyncManager";
+import { describeBackgroundSync } from "@/services/backgroundSync/backgroundSyncLogic";
+import { refreshNotificationPermission } from "@/services/notifications/notificationManager";
 import { TextField } from "@/components/ui/TextField";
 import appIcon from "@/assets/icon.png";
 
@@ -261,6 +270,8 @@ export function SettingsPage() {
     const newVal = !notificationsEnabled;
     setNotificationsEnabled(newVal);
     await setSetting("notifications_enabled", newVal ? "true" : "false");
+    // Apply right away instead of on the next app start
+    refreshNotificationPermission().catch(() => {});
   }, [notificationsEnabled]);
 
   const handleUndoDelayChange = useCallback(async (value: string) => {
@@ -680,6 +691,8 @@ export function SettingsPage() {
                       }}
                     />
                   </Section>
+
+                  {isBackgroundSyncSupported() && <BackgroundSyncSection />}
 
                   {smartNotifications && (
                     <>
@@ -2186,6 +2199,152 @@ function SidebarNavEditor() {
         </button>
       )}
     </Section>
+  );
+}
+
+/** Android only: foreground-service background sync and the permissions it depends on. */
+function BackgroundSyncSection() {
+  const [enabled, setEnabled] = useState(false);
+  const [status, setStatus] = useState<NativeBgSyncStatus | null>(null);
+  const [deniedAfterAsking, setDeniedAfterAsking] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    try {
+      const [on, st] = await Promise.all([isBackgroundSyncEnabled(), getBackgroundSyncStatus()]);
+      setEnabled(on);
+      setStatus(st);
+      if (st.notificationsEnabled) refreshNotificationPermission().catch(() => {});
+    } catch (err) {
+      console.warn("Background sync status unavailable:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    refresh();
+    // Re-check after returning from a system settings screen
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    // Permission dialogs and the battery prompt don't hide the page, only blur it
+    window.addEventListener("focus", refresh);
+    window.addEventListener(BACKGROUND_SYNC_CHANGED_EVENT, refresh);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener(BACKGROUND_SYNC_CHANGED_EVENT, refresh);
+    };
+  }, [refresh]);
+
+  const askNotificationPermission = useCallback(async () => {
+    const { requestPermission } = await import("@tauri-apps/plugin-notification");
+    const result = await requestPermission();
+    if (result !== "granted") setDeniedAfterAsking(true);
+    await refreshNotificationPermission().catch(() => false);
+    await refresh();
+    // areNotificationsEnabled() can lag the permission grant by a moment
+    setTimeout(() => {
+      refresh();
+    }, 1000);
+  }, [refresh]);
+
+  const handleToggle = useCallback(async () => {
+    if (busy) return;
+    const next = !enabled;
+    setBusy(true);
+    setError(null);
+    setEnabled(next);
+    try {
+      const st = await setBackgroundSyncEnabled(next);
+      setStatus(st);
+      if (next && !st.notificationsEnabled && !deniedAfterAsking) await askNotificationPermission();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      await refresh();
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, enabled, deniedAfterAsking, askNotificationPermission, refresh]);
+
+  if (!status) return null;
+  const view = describeBackgroundSync(enabled, status, deniedAfterAsking);
+
+  return (
+    <Section title="Background">
+      <ToggleRow
+        label="Keep syncing in the background"
+        description={view.summary}
+        checked={enabled}
+        onToggle={handleToggle}
+      />
+      {error && <p className="text-xs text-danger">{error}</p>}
+      {enabled && (
+        <p className="text-xs text-text-tertiary">
+          Velo shows a small silent "Velo is syncing" notification while this is on. Swiping Velo away from recent apps stops it.
+        </p>
+      )}
+      {enabled && view.notifications !== "granted" && (
+        <ActionRow
+          label="Allow notifications"
+          description={
+            view.notifications === "ask"
+              ? "Android needs your permission before Velo can tell you about new mail."
+              : "Notifications are blocked for Velo. Turn them on in Android's settings."
+          }
+          action={view.notifications === "ask" ? "Allow" : "Open settings"}
+          onClick={() => {
+            if (view.notifications === "ask") askNotificationPermission().catch(() => {});
+            else openNotificationSettings().catch(() => {});
+          }}
+        />
+      )}
+      {view.showBatteryRow && (
+        <ActionRow
+          label="Unrestricted battery use"
+          description="Without this, Android may pause background sync to save power."
+          action="Allow"
+          onClick={() => {
+            requestIgnoreBatteryOptimizations().catch(() => {});
+          }}
+        />
+      )}
+      {view.showAutostartRow && (
+        <ActionRow
+          label="Autostart"
+          description='HyperOS/MIUI also stop apps that lack "Autostart". Enable it for Velo, and set Battery saver to "No restrictions".'
+          action="Open"
+          onClick={() => {
+            openAutostartSettings().catch(() => {});
+          }}
+        />
+      )}
+    </Section>
+  );
+}
+
+function ActionRow({
+  label,
+  description,
+  action,
+  onClick,
+}: {
+  label: string;
+  description: string;
+  action: string;
+  onClick: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between">
+      <div className="min-w-0">
+        <span className="text-sm text-text-secondary">{label}</span>
+        <p className="text-xs text-text-tertiary mt-0.5">{description}</p>
+      </div>
+      <Button variant="secondary" onClick={onClick} className="shrink-0 ml-4">
+        {action}
+      </Button>
+    </div>
   );
 }
 

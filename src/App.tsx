@@ -38,6 +38,7 @@ import {
   stopBundleChecker,
 } from "./services/bundles/bundleManager";
 import { initNotifications } from "./services/notifications/notificationManager";
+import { initBackgroundSync } from "./services/backgroundSync/backgroundSyncManager";
 import {
   initGlobalShortcut,
   unregisterComposeShortcut,
@@ -361,6 +362,10 @@ export default function App() {
         if (!isMobilePlatform() || mapped.length > 0) {
           await initNotifications();
         }
+
+        // Android: (re)start the background-sync foreground service if enabled.
+        // Must run now, while the app is in the foreground.
+        await initBackgroundSync().catch((err) => console.warn("Background sync init failed:", err));
 
         // Initialize global compose shortcut
         await initGlobalShortcut();
