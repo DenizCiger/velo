@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { isMobilePlatform } from "@/utils/platform";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { useContextMenuStore } from "@/stores/contextMenuStore";
 import { useThreadStore } from "@/stores/threadStore";
@@ -584,13 +585,18 @@ function ThreadMenu({
           } as ContextMenuItem,
         ]
       : []),
-    {
-      id: "pop-out",
-      label: "Open in New Window",
-      icon: ExternalLink,
-      disabled: isMulti,
-      action: handlePopOut,
-    },
+    // Pop-out windows are a desktop feature (mobile has a single window)
+    ...(isMobilePlatform()
+      ? []
+      : [
+          {
+            id: "pop-out",
+            label: "Open in New Window",
+            icon: ExternalLink,
+            disabled: isMulti,
+            action: handlePopOut,
+          } as ContextMenuItem,
+        ]),
   ];
 
   return <ContextMenu items={items} position={position} onClose={onClose} />;

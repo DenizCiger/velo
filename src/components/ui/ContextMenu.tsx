@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useClickOutside } from "@/hooks/useClickOutside";
 import { ChevronRight, Check } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { useIsCompact } from "@/hooks/useLayoutMode";
+import { SheetMenu } from "@/components/mobile/SheetMenu";
 
 export interface ContextMenuItem {
   id: string;
@@ -22,7 +24,17 @@ interface ContextMenuProps {
   onClose: () => void;
 }
 
-export function ContextMenu({ items, position, onClose }: ContextMenuProps) {
+/**
+ * Context menu. On the phone layout the same items are shown as a bottom sheet
+ * (long-press fires `contextmenu` in Android WebView, so callers need no changes).
+ */
+export function ContextMenu(props: ContextMenuProps) {
+  const compact = useIsCompact();
+  if (compact) return <SheetMenu items={props.items} onClose={props.onClose} />;
+  return <DesktopContextMenu {...props} />;
+}
+
+function DesktopContextMenu({ items, position, onClose }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement | null>(null);
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const [submenuOpenId, setSubmenuOpenId] = useState<string | null>(null);
