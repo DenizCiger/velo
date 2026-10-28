@@ -1,4 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { ChevronRight as ChevronRightIcon } from "lucide-react";
+import { useIsCompact } from "@/hooks/useLayoutMode";
+import { useBackHandler } from "@/hooks/useBackHandler";
+import { isMobilePlatform, isDesktopPlatform } from "@/utils/platform";
 import { useParams } from "@tanstack/react-router";
 import { useUIStore } from "@/stores/uiStore";
 import { navigateToLabel, navigateToSettings } from "@/router/navigate";
@@ -101,6 +105,13 @@ export function SettingsPage() {
   const { tab } = useParams({ strict: false }) as { tab?: string };
   const activeTab = (tab && tabs.some((t) => t.id === tab) ? tab : "general") as SettingsTab;
   const setActiveTab = (t: SettingsTab) => navigateToSettings(t);
+  // Phone layout: a list of sections first, then one section full-screen
+  const compact = useIsCompact();
+  const [compactShowList, setCompactShowList] = useState(true);
+  useBackHandler(compact && !compactShowList, () => setCompactShowList(true));
+  // Keyboard shortcuts are meaningless on a phone
+  const visibleTabs = isMobilePlatform() ? tabs.filter((t) => t.id !== "shortcuts") : tabs;
+  const showCompactList = compact && compactShowList;
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [undoSendDelay, setUndoSendDelay] = useState("5");
   const [clientId, setClientId] = useState("");
@@ -164,12 +175,14 @@ export function SettingsPage() {
       const syncDays = await getSetting("sync_period_days");
       setSyncPeriodDays(syncDays ?? "365");
 
-      // Load autostart state
-      try {
-        const { isEnabled } = await import("@tauri-apps/plugin-autostart");
-        setAutostartEnabled(await isEnabled());
-      } catch {
-        // autostart plugin may not be available in dev
+      // Load autostart state (desktop only)
+      if (isDesktopPlatform()) {
+        try {
+          const { isEnabled } = await import("@tauri-apps/plugin-autostart");
+          setAutostartEnabled(await isEnabled());
+        } catch {
+          // autostart plugin may not be available in dev
+        }
       }
 
       // Load AI settings
@@ -356,24 +369,54 @@ export function SettingsPage() {
   const activeTabDef = tabs.find((t) => t.id === activeTab);
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-bg-primary/50">
+    <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-bg-primary/50 compact:bg-surface">
       {/* Header */}
-      <div className="flex items-center gap-3 px-5 py-3 border-b border-border-primary shrink-0 bg-bg-primary/60 backdrop-blur-sm">
+      <div className="flex items-center gap-3 px-5 py-3 border-b border-border-primary shrink-0 bg-bg-primary/60 backdrop-blur-sm compact:gap-1 compact:px-1 compact:py-0 compact:pt-[var(--safe-top)] compact:min-h-[calc(3.5rem+var(--safe-top))] compact:bg-transparent compact:border-border-secondary">
         <button
-          onClick={() => navigateToLabel("inbox")}
-          className="p-1.5 -ml-1 rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
-          title="Back to Inbox"
+          onClick={() => {
+            if (compact && !compactShowList) setCompactShowList(true);
+            else navigateToLabel("inbox");
+          }}
+          className="p-1.5 -ml-1 rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors compact:ml-0 compact:w-12 compact:h-12 compact:flex compact:items-center compact:justify-center compact:rounded-full compact:active:bg-bg-hover"
+          title={compact && !compactShowList ? "Back to Settings" : "Back to Inbox"}
+          aria-label="Back"
         >
-          <ArrowLeft size={18} />
+          <ArrowLeft size={compact ? 22 : 18} />
         </button>
-        <h1 className="text-base font-semibold text-text-primary">Settings</h1>
+        <h1 className="text-base font-semibold text-text-primary compact:text-lg compact:font-medium">
+          {compact && !compactShowList ? activeTabDef?.label ?? "Settings" : "Settings"}
+        </h1>
       </div>
 
+      {showCompactList && (
+        <nav className="flex-1 overflow-y-auto py-2 pb-[calc(var(--safe-bottom)+1rem)]" aria-label="Settings sections">
+          {visibleTabs.map((t) => {
+            const Icon = t.icon;
+            return (
+              <button
+                key={t.id}
+                onClick={() => {
+                  setActiveTab(t.id);
+                  setCompactShowList(false);
+                }}
+                className="flex items-center gap-4 w-full min-h-14 px-5 text-left text-[0.9375rem] text-text-primary active:bg-bg-hover transition-colors"
+              >
+                <span className="w-9 h-9 rounded-full bg-accent/10 text-accent flex items-center justify-center shrink-0">
+                  <Icon size={18} />
+                </span>
+                <span className="flex-1">{t.label}</span>
+                <ChevronRightIcon size={18} className="text-text-tertiary" />
+              </button>
+            );
+          })}
+        </nav>
+      )}
+
       {/* Body: sidebar nav + content */}
-      <div className="flex flex-1 min-h-0">
+      <div className={`flex flex-1 min-h-0${showCompactList ? " hidden" : ""}`}>
         {/* Vertical tab sidebar */}
-        <nav className="w-48 border-r border-border-primary py-2 overflow-y-auto shrink-0 bg-bg-primary/30">
-          {tabs.map((tab) => {
+        <nav className="w-48 border-r border-border-primary py-2 overflow-y-auto shrink-0 bg-bg-primary/30 compact:hidden">
+          {visibleTabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
             return (
@@ -394,11 +437,11 @@ export function SettingsPage() {
         </nav>
 
         {/* Scrollable content */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="max-w-2xl px-8 py-6">
+        <div className="flex-1 overflow-y-auto compact:overscroll-contain">
+          <div className="max-w-2xl px-8 py-6 compact:px-4 compact:py-4 compact:pb-[calc(var(--safe-bottom)+var(--keyboard-inset)+2rem)] settings-content">
             {/* Tab title */}
             {activeTabDef && (
-              <div className="mb-6">
+              <div className="mb-6 compact:hidden">
                 <h2 className="text-lg font-semibold text-text-primary">
                   {activeTabDef.label}
                 </h2>
@@ -515,14 +558,16 @@ export function SettingsPage() {
 
                   <SidebarNavEditor />
 
-                  <Section title="Startup">
-                    <ToggleRow
-                      label="Launch at login"
-                      description="Start Velo automatically when you log in (minimized to tray)"
-                      checked={autostartEnabled}
-                      onToggle={handleAutostartToggle}
-                    />
-                  </Section>
+                  {isDesktopPlatform() && (
+                    <Section title="Startup">
+                      <ToggleRow
+                        label="Launch at login"
+                        description="Start Velo automatically when you log in (minimized to tray)"
+                        checked={autostartEnabled}
+                        onToggle={handleAutostartToggle}
+                      />
+                    </Section>
+                  )}
 
                   <Section title="Privacy & Security">
                     <ToggleRow
@@ -1700,6 +1745,7 @@ function DeveloperTab() {
         </div>
       </Section>
 
+      {isDesktopPlatform() && (
       <Section title="Developer Tools">
         <div className="flex items-center justify-between">
           <div>
@@ -1721,6 +1767,7 @@ function DeveloperTab() {
           </Button>
         </div>
       </Section>
+      )}
     </>
   );
 }
@@ -2308,7 +2355,10 @@ function ToggleRow({
       </div>
       <button
         onClick={onToggle}
-        className={`w-10 h-5 rounded-full transition-colors relative shrink-0 ml-4 ${
+        role="switch"
+        aria-checked={checked}
+        aria-label={label}
+        className={`w-10 h-5 rounded-full transition-colors relative shrink-0 ml-4 compact:before:absolute compact:before:-inset-3.5 compact:before:content-[""] ${
           checked ? "bg-accent" : "bg-bg-tertiary"
         }`}
       >

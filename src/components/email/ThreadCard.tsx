@@ -79,7 +79,7 @@ export const ThreadCard = memo(function ThreadCard({ thread, isSelected, onClick
       onContextMenu={handleContextMenu}
       aria-label={`${thread.isRead ? "" : "Unread "}email from ${thread.fromName ?? thread.fromAddress ?? "Unknown"}: ${thread.subject ?? "(No subject)"}`}
       aria-selected={isSelected}
-      className={`w-full text-left border-b border-border-secondary group hover-lift press-scale ${
+      className={`w-full text-left border-b border-border-secondary group hover-lift press-scale compact:active:bg-bg-hover compact:border-border-secondary/60 ${
         emailDensity === "compact" ? "px-3 py-1.5" : emailDensity === "spacious" ? "px-4 py-4" : "px-4 py-3"
       } ${
         isDragging
@@ -95,7 +95,7 @@ export const ThreadCard = memo(function ThreadCard({ thread, isSelected, onClick
         {/* Avatar */}
         <div
           className={`rounded-full flex items-center justify-center shrink-0 font-medium text-white ${
-            emailDensity === "compact" ? "w-7 h-7 text-xs" : emailDensity === "spacious" ? "w-10 h-10 text-sm" : "w-9 h-9 text-sm"
+            emailDensity === "compact" ? "w-7 h-7 text-xs" : emailDensity === "spacious" ? "w-10 h-10 text-sm" : "w-9 h-9 text-sm compact:w-10 compact:h-10 compact:text-base"
           } ${
             isMultiSelected ? "bg-accent" : thread.isRead ? "bg-text-tertiary" : "bg-accent"
           }`}
@@ -108,7 +108,7 @@ export const ThreadCard = memo(function ThreadCard({ thread, isSelected, onClick
           {/* First row: sender + date */}
           <div className="flex items-center justify-between gap-2">
             <span
-              className={`text-sm truncate ${
+              className={`text-sm truncate compact:text-[0.9375rem] ${
                 thread.isRead
                   ? "text-text-secondary"
                   : "font-semibold text-text-primary"
@@ -116,7 +116,7 @@ export const ThreadCard = memo(function ThreadCard({ thread, isSelected, onClick
             >
               {thread.fromName ?? thread.fromAddress ?? "Unknown"}
             </span>
-            <span className="text-xs text-text-tertiary whitespace-nowrap shrink-0">
+            <span className={`text-xs whitespace-nowrap shrink-0 ${thread.isRead ? "text-text-tertiary" : "text-text-tertiary compact:text-accent compact:font-semibold"}`}>
               {formatRelativeDate(thread.lastMessageAt)}
             </span>
           </div>
@@ -132,7 +132,7 @@ export const ThreadCard = memo(function ThreadCard({ thread, isSelected, onClick
 
           {/* Snippet + indicators */}
           <div className={`flex items-center gap-1.5 mt-0.5 ${emailDensity === "compact" ? "hidden" : ""}`}>
-            <span className="text-xs text-text-tertiary truncate flex-1">
+            <span className="text-xs text-text-tertiary truncate flex-1 compact:text-[0.8125rem]">
               {thread.snippet}
             </span>
             {showCategoryBadge && category && category !== "Primary" && CATEGORY_COLORS[category] && (

@@ -10,7 +10,12 @@ import { snoozeThread } from "@/services/snooze/snoozeManager";
 import { getGmailClient } from "@/services/gmail/tokenManager";
 import { SnoozeDialog } from "./SnoozeDialog";
 import { FollowUpDialog } from "./FollowUpDialog";
-import { Archive, Trash2, MailOpen, Mail, Star, Clock, Ban, Pin, MailMinus, BellRing, VolumeX, Reply, ReplyAll, Forward, FolderInput, Printer, Download, ExternalLink, PanelRightClose, PanelRightOpen, ListTodo } from "lucide-react";
+import { Archive, Trash2, MailOpen, Mail, Star, Clock, Ban, Pin, MailMinus, BellRing, VolumeX, Reply, ReplyAll, Forward, FolderInput, Printer, Download, ExternalLink, PanelRightClose, PanelRightOpen, ListTodo, ArrowLeft, MoreVertical } from "lucide-react";
+import { SheetMenu } from "@/components/mobile/SheetMenu";
+import type { ContextMenuItem } from "@/components/ui/ContextMenu";
+import { navigateBack } from "@/router/navigate";
+import { isMobilePlatform } from "@/utils/platform";
+import { archiveThreadWithUndo, trashThreadWithUndo, snoozeThreadWithUndo } from "@/services/threadActionsWithUndo";
 import type { DbMessage } from "@/services/db/messages";
 import { insertFollowUpReminder, getFollowUpForThread, cancelFollowUpForThread } from "@/services/db/followUpReminders";
 import { Button } from "@/components/ui/Button";
@@ -30,13 +35,16 @@ interface ActionBarProps {
   onPopOut?: () => void;
   onToggleContactSidebar?: () => void;
   onToggleTaskSidebar?: () => void;
+  /** "mobile": phone top app bar with back button + overflow sheet */
+  variant?: "default" | "mobile";
 }
 
 function Separator() {
   return <div className="w-px h-5 bg-border-secondary mx-1 shrink-0" />;
 }
 
-export function ActionBar({ thread, messages, noReply, defaultReplyMode = "reply", contactSidebarVisible, taskSidebarVisible, onReply, onReplyAll, onForward, onPrint, onExport, onPopOut, onToggleContactSidebar, onToggleTaskSidebar }: ActionBarProps) {
+export function ActionBar({ thread, messages, noReply, defaultReplyMode = "reply", contactSidebarVisible, taskSidebarVisible, onReply, onReplyAll, onForward, onPrint, onExport, onPopOut, onToggleContactSidebar, onToggleTaskSidebar, variant = "default" }: ActionBarProps) {
+  const [showMore, setShowMore] = useState(false);
   const updateThread = useThreadStore((s) => s.updateThread);
   const removeThread = useThreadStore((s) => s.removeThread);
   const activeAccountId = useAccountStore((s) => s.activeAccountId);
@@ -93,6 +101,11 @@ export function ActionBar({ thread, messages, noReply, defaultReplyMode = "reply
   const handleSnooze = async (until: number) => {
     if (!activeAccountId) return;
     setShowSnooze(false);
+    if (variant === "mobile") {
+      navigateBack();
+      snoozeThreadWithUndo(activeAccountId, thread, until);
+      return;
+    }
     try {
       await snoozeThread(activeAccountId, thread.id, until);
       removeThread(thread.id);
@@ -200,6 +213,111 @@ export function ActionBar({ thread, messages, noReply, defaultReplyMode = "reply
       console.error("Failed to cancel follow-up:", err);
     }
   };
+
+  const dialogs = (
+    <>
+      <SnoozeDialog
+        isOpen={showSnooze}
+        onSnooze={handleSnooze}
+        onClose={() => setShowSnooze(false)}
+      />
+      <FollowUpDialog
+        isOpen={showFollowUp}
+        onSetReminder={handleFollowUp}
+        onClose={() => setShowFollowUp(false)}
+      />
+    </>
+  );
+
+  if (variant === "mobile") {
+    // Leaving actions: go back to the list first (so the screen never shows a
+    // vanished thread), then act. Archive/delete get a 5s Undo snackbar.
+    const andBack = (fn: () => Promise<void>) => () => {
+      navigateBack();
+      fn().catch((err) => console.error("Thread action failed:", err));
+    };
+    const isPlainList = activeLabel !== "trash" && activeLabel !== "drafts";
+    const handleArchiveMobile = () => {
+      navigateBack();
+      if (activeAccountId) archiveThreadWithUndo(activeAccountId, thread);
+    };
+    const handleDeleteMobile = isPlainList
+      ? () => {
+          navigateBack();
+          if (activeAccountId) trashThreadWithUndo(activeAccountId, thread);
+        }
+      : andBack(handleDelete);
+    const moreItems: ContextMenuItem[] = [
+      ...(hasLastMessage
+        ? [
+            { id: "reply", label: "Reply", icon: Reply, disabled: noReply, action: onReply },
+            { id: "reply-all", label: "Reply all", icon: ReplyAll, disabled: noReply, action: onReplyAll },
+            { id: "forward", label: "Forward", icon: Forward, action: onForward },
+            { id: "sep-1", label: "", separator: true },
+          ]
+        : []),
+      { id: "star", label: thread.isStarred ? "Remove star" : "Add star", icon: Star, action: handleToggleStar },
+      { id: "snooze", label: "Snooze…", icon: Clock, action: () => setShowSnooze(true) },
+      {
+        id: "move",
+        label: "Move to…",
+        icon: FolderInput,
+        action: () => window.dispatchEvent(new CustomEvent("velo-move-to-folder", { detail: { threadIds: [thread.id] } })),
+      },
+      { id: "pin", label: thread.isPinned ? "Unpin" : "Pin to top", icon: Pin, action: handleTogglePin },
+      { id: "mute", label: thread.isMuted ? "Unmute" : "Mute conversation", icon: VolumeX, action: handleToggleMute },
+      hasFollowUp
+        ? { id: "follow-up", label: "Cancel follow-up reminder", icon: BellRing, action: handleCancelFollowUp }
+        : { id: "follow-up", label: "Remind me if no reply…", icon: BellRing, disabled: !hasLastMessage, action: () => setShowFollowUp(true) },
+      ...(hasUnsubscribe
+        ? [{
+            id: "unsubscribe",
+            label: unsubscribeStatus === "done" ? "Unsubscribed" : unsubscribeStatus === "loading" ? "Unsubscribing…" : "Unsubscribe",
+            icon: MailMinus,
+            disabled: unsubscribeStatus !== "idle",
+            action: handleUnsubscribe,
+          }]
+        : []),
+      { id: "sep-2", label: "", separator: true },
+      { id: "spam", label: isSpamView ? "Not spam" : "Report spam", icon: Ban, danger: !isSpamView, action: andBack(handleSpam) },
+      ...(isMobilePlatform() ? [] : [{ id: "export", label: "Export as .eml", icon: Download, action: onExport }]),
+    ];
+
+    const iconBtn = "w-12 h-12 flex items-center justify-center rounded-full text-text-secondary active:bg-bg-hover transition-colors";
+    return (
+      <>
+        <div className="sticky top-0 z-20 flex items-center gap-0.5 px-1 pt-[var(--safe-top)] min-h-[calc(3.5rem+var(--safe-top))] shrink-0 bg-bg-primary/85 backdrop-blur-xl">
+          <button onClick={() => navigateBack()} className={iconBtn} aria-label="Back" title="Back">
+            <ArrowLeft size={22} />
+          </button>
+          <div className="flex-1" />
+          <button onClick={handleArchiveMobile} className={iconBtn} aria-label="Archive" title="Archive">
+            <Archive size={21} />
+          </button>
+          <button onClick={handleDeleteMobile} className={iconBtn} aria-label="Delete" title="Delete">
+            <Trash2 size={21} />
+          </button>
+          <button
+            onClick={() => {
+              // "Mark unread" means "later" — go back to the list like Gmail does
+              if (thread.isRead) navigateBack();
+              handleToggleRead().catch((err) => console.error("Failed to toggle read:", err));
+            }}
+            className={iconBtn}
+            aria-label={thread.isRead ? "Mark unread" : "Mark read"}
+            title={thread.isRead ? "Mark unread" : "Mark read"}
+          >
+            {thread.isRead ? <Mail size={21} /> : <MailOpen size={21} />}
+          </button>
+          <button onClick={() => setShowMore(true)} className={iconBtn} aria-label="More actions" title="More">
+            <MoreVertical size={21} />
+          </button>
+        </div>
+        {showMore && <SheetMenu items={moreItems} onClose={() => setShowMore(false)} title={thread.subject ?? "(No subject)"} />}
+        {dialogs}
+      </>
+    );
+  }
 
   return (
     <>
@@ -321,9 +439,14 @@ export function ActionBar({ thread, messages, noReply, defaultReplyMode = "reply
         <div className="ml-auto" />
 
         {/* Utility group */}
-        <Button variant="secondary" iconOnly icon={<Printer size={15} />} onClick={onPrint} title="Print" />
-        <Button variant="secondary" iconOnly icon={<Download size={15} />} onClick={onExport} title="Export as .eml" />
-        <Button variant="secondary" iconOnly icon={<ExternalLink size={15} />} onClick={onPopOut} title="Open in new window" />
+        {/* Print and pop-out windows don't exist in the mobile WebView */}
+        {!isMobilePlatform() && (
+          <>
+            <Button variant="secondary" iconOnly icon={<Printer size={15} />} onClick={onPrint} title="Print" />
+            <Button variant="secondary" iconOnly icon={<Download size={15} />} onClick={onExport} title="Export as .eml" />
+            <Button variant="secondary" iconOnly icon={<ExternalLink size={15} />} onClick={onPopOut} title="Open in new window" />
+          </>
+        )}
         <Button
           variant="secondary"
           iconOnly
@@ -340,16 +463,7 @@ export function ActionBar({ thread, messages, noReply, defaultReplyMode = "reply
         />
       </div>
 
-      <SnoozeDialog
-        isOpen={showSnooze}
-        onSnooze={handleSnooze}
-        onClose={() => setShowSnooze(false)}
-      />
-      <FollowUpDialog
-        isOpen={showFollowUp}
-        onSetReminder={handleFollowUp}
-        onClose={() => setShowFollowUp(false)}
-      />
+      {dialogs}
     </>
   );
 }

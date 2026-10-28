@@ -3,6 +3,56 @@ import { EmailList } from "./EmailList";
 import { ReadingPane } from "./ReadingPane";
 import { useUIStore } from "@/stores/uiStore";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
+import { useIsCompact } from "@/hooks/useLayoutMode";
+import { useSelectedThreadId } from "@/hooks/useRouteNavigation";
+import { useThreadStore } from "@/stores/threadStore";
+import { ThreadView } from "../email/ThreadView";
+import { navigateBack } from "@/router/navigate";
+import { ArrowLeft } from "lucide-react";
+
+/**
+ * Phone layout: one screen at a time. The list stays mounted underneath (so
+ * its scroll position survives) and the open thread slides in over it as a
+ * full-screen page. Back (button or Android Back) returns to the list.
+ */
+function CompactMailLayout() {
+  const selectedThreadId = useSelectedThreadId();
+  const thread = useThreadStore((s) => (selectedThreadId ? s.threadMap.get(selectedThreadId) ?? null : null));
+
+  return (
+    <div className="relative flex flex-1 min-w-0 overflow-hidden">
+      <div className="flex flex-1 min-w-0" inert={selectedThreadId ? true : undefined}>
+        <ErrorBoundary name="EmailList">
+          <EmailList compact />
+        </ErrorBoundary>
+      </div>
+      {selectedThreadId && (
+        <div key={selectedThreadId} className="absolute inset-0 z-30 flex flex-col bg-surface page-enter pl-[var(--safe-left)] pr-[var(--safe-right)]">
+          <ErrorBoundary name="ThreadView">
+            {thread ? (
+              <ThreadView thread={thread} />
+            ) : (
+              <div className="flex flex-col h-full">
+                <div className="flex items-center px-1 pt-[var(--safe-top)] h-[calc(3.5rem+var(--safe-top))]">
+                  <button
+                    onClick={() => navigateBack()}
+                    className="w-12 h-12 flex items-center justify-center rounded-full text-text-secondary active:bg-bg-hover"
+                    aria-label="Back"
+                  >
+                    <ArrowLeft size={22} />
+                  </button>
+                </div>
+                <div className="flex-1 flex items-center justify-center text-sm text-text-tertiary px-8 text-center">
+                  This conversation is no longer in this folder.
+                </div>
+              </div>
+            )}
+          </ErrorBoundary>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function ResizableEmailLayout() {
   const emailListWidth = useUIStore((s) => s.emailListWidth);
@@ -51,6 +101,9 @@ function ResizableEmailLayout() {
 
 export function MailLayout() {
   const readingPanePosition = useUIStore((s) => s.readingPanePosition);
+  const compact = useIsCompact();
+
+  if (compact) return <CompactMailLayout />;
 
   if (readingPanePosition === "right") {
     return (

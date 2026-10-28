@@ -27,6 +27,9 @@
   --color-sidebar-hover: rgba(231, 229, 228, 0.8);
   --color-sidebar-active: #4f46e5;
 
+  /* Opaque page surface (phone screens that stack over each other) */
+  --color-surface: #f8f7f6;
+
   --glass-blur: 20px;
   --glass-blur-heavy: 24px;
   --glass-border: rgba(255, 255, 255, 0.2);
@@ -37,6 +40,35 @@
 }
 
 @custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Phone layout variant — must match COMPACT_LAYOUT_QUERY in src/utils/platform.ts.
+ * Desktop windows (>= 800px wide, fine pointer) never match.
+ */
+@custom-variant compact {
+  @media (max-width: 767px) {
+    @slot;
+  }
+  @media (max-height: 500px) and (pointer: coarse) {
+    @slot;
+  }
+}
+
+/*
+ * Safe areas (Android edge-to-edge). env() works on current WebViews; the
+ * --native-inset-* fallbacks are written by src/utils/androidBridge.ts for
+ * older WebViews. Both are 0 on desktop.
+ */
+:root {
+  --safe-top: max(env(safe-area-inset-top, 0px), var(--native-inset-top, 0px));
+  --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--native-inset-bottom, 0px));
+  --safe-left: max(env(safe-area-inset-left, 0px), var(--native-inset-left, 0px));
+  --safe-right: max(env(safe-area-inset-right, 0px), var(--native-inset-right, 0px));
+  --keyboard-inset: 0px;
+  /* Phone motion: standard Material-ish easing */
+  --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
+  --ease-out-soft: cubic-bezier(0.25, 0.8, 0.25, 1);
+}
 
 /*
  * Dark mode overrides — applied when <html class="dark">
@@ -63,6 +95,8 @@
   --color-sidebar-bg: rgba(15, 23, 42, 0.88);
   --color-sidebar-text: #e2e8f0;
   --color-sidebar-hover: rgba(30, 41, 59, 0.7);
+
+  --color-surface: #0f172a;
 
   --glass-border: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
@@ -365,9 +399,11 @@ body {
   transition-duration: var(--anim-fast);
   transition-timing-function: ease;
 }
-.hover-lift:hover:not(:active) {
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+@media (hover: hover) {
+  .hover-lift:hover:not(:active) {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  }
 }
 
 /* Utility: press scale */
@@ -381,9 +417,11 @@ body {
   transition-duration: var(--anim-fast);
   transition-timing-function: ease;
 }
-.interactive-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+@media (hover: hover) {
+  .interactive-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  }
 }
 .interactive-btn:active {
   transform: scale(0.97);
@@ -457,4 +495,108 @@ select {
 }
 .dark select option:checked {
   background-color: #2b3b66;
+}
+
+/* ============================================
+ * Mobile (Android) — only applies under html.platform-mobile
+ * or the compact layout; desktop is unaffected.
+ * ============================================ */
+
+html.platform-mobile {
+  -webkit-tap-highlight-color: transparent;
+  /* The page itself never scrolls; inner lists do */
+  overscroll-behavior: none;
+}
+
+html.platform-mobile body {
+  overscroll-behavior: none;
+}
+
+/* UI chrome: no long-press callout / text selection handles */
+html.platform-mobile .no-select,
+html.platform-mobile button {
+  -webkit-touch-callout: none;
+}
+
+/* Phones: rows/buttons use a pressed background instead of shrinking */
+html.platform-mobile .press-scale:active {
+  transform: none;
+}
+
+/* Keep the gradient blobs static on phones (battery, scroll smoothness) */
+html.platform-mobile .animated-bg .blob {
+  animation: none;
+}
+
+/* Drawer variant of the sidebar: 48dp pill-shaped rows (Material nav drawer) */
+.sidebar-drawer nav button {
+  min-height: 3rem;
+  border-radius: 9999px;
+  margin-inline: 0.75rem;
+  width: calc(100% - 1.5rem);
+  padding-inline: 1rem;
+}
+.sidebar-drawer nav > div > div > button {
+  /* split-inbox category rows */
+  min-height: 2.75rem;
+  padding-left: 2.75rem;
+}
+.sidebar-drawer nav > .justify-between {
+  /* section headers ("Smart folders", "Labels") line up with row text */
+  padding-inline: 1.75rem 1.25rem;
+}
+.sidebar-drawer nav > .justify-between button {
+  /* the "+" in section headers stays a small round target */
+  margin: 0;
+  width: 2.5rem;
+  min-height: 2.5rem;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.sidebar-drawer > .border-t button {
+  min-height: 3rem;
+  min-width: 3rem;
+  border-radius: 9999px;
+}
+
+/* Native Android scrollbars are overlay-only; the desktop's classic bars just waste width */
+html.platform-mobile ::-webkit-scrollbar {
+  display: none;
+}
+
+/* Slide-in "page" transition for the phone thread screen */
+@keyframes pageIn {
+  from { transform: translateX(24%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+.page-enter {
+  animation: pageIn 260ms var(--ease-emphasized) both;
+}
+
+/* Bottom sheet */
+@keyframes sheetIn {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+.sheet-panel {
+  animation: sheetIn 280ms var(--ease-emphasized) both;
+}
+@keyframes scrimIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.sheet-scrim {
+  animation: scrimIn 200ms ease-out both;
+}
+
+/* App setting "Reduce motion" mirrors prefers-reduced-motion */
+.reduce-motion .page-enter,
+.reduce-motion .sheet-panel,
+.reduce-motion .sheet-scrim {
+  animation: none;
+}
+.reduce-motion .motion-transform {
+  transition-duration: 0.01ms !important;
 }

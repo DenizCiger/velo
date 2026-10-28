@@ -21,7 +21,13 @@ import { useComposerStore } from "@/stores/composerStore";
 import { getMessagesForThread } from "@/services/db/messages";
 import { getSmartFolderSearchQuery, mapSmartFolderRows, type SmartFolderRow } from "@/services/search/smartFolderQuery";
 import { getDb } from "@/services/db/connection";
-import { Archive, Trash2, X, Ban, Filter, ChevronRight, Package, FolderSearch } from "lucide-react";
+import { Archive, Trash2, X, Ban, Filter, ChevronRight, Package, FolderSearch, Clock, Pencil, RefreshCw } from "lucide-react";
+import { MobileListHeader } from "../mobile/MobileListHeader";
+import { SwipeableRow } from "../mobile/SwipeableRow";
+import { SnoozeDialog } from "../email/SnoozeDialog";
+import { usePullToRefresh, PULL_TRIGGER } from "@/hooks/usePullToRefresh";
+import { triggerSync } from "@/services/gmail/syncManager";
+import { archiveThreadWithUndo, snoozeThreadWithUndo } from "@/services/threadActionsWithUndo";
 import { EmptyState } from "../ui/EmptyState";
 import {
   InboxClearIllustration,
@@ -44,7 +50,23 @@ const LABEL_MAP: Record<string, string> = {
   all: "", // no filter
 };
 
-export function EmailList({ width, listRef }: { width?: number; listRef?: React.Ref<HTMLDivElement> }) {
+/** Views where "archive" / "snooze" make sense as swipe actions */
+const NO_SWIPE_LABELS = new Set(["trash", "spam", "drafts", "sent", "snoozed"]);
+
+/** Resolve after the next sync finishes (or after a timeout). */
+function waitForSyncDone(timeoutMs: number): Promise<void> {
+  return new Promise((resolve) => {
+    const done = () => {
+      window.removeEventListener("velo-sync-done", done);
+      clearTimeout(timer);
+      resolve();
+    };
+    const timer = setTimeout(done, timeoutMs);
+    window.addEventListener("velo-sync-done", done);
+  });
+}
+
+export function EmailList({ width, listRef, compact = false }: { width?: number; listRef?: React.Ref<HTMLDivElement>; compact?: boolean }) {
   const threads = useThreadStore((s) => s.threads);
   const selectedThreadId = useSelectedThreadId();
   const selectedThreadIds = useThreadStore((s) => s.selectedThreadIds);
@@ -95,8 +117,16 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
 
   const handleThreadContextMenu = useCallback((e: React.MouseEvent, threadId: string) => {
     e.preventDefault();
+    if (compact) {
+      // Phone: long-press starts (or extends) selection mode, like Gmail
+      if (!useThreadStore.getState().selectedThreadIds.has(threadId)) {
+        useThreadStore.getState().toggleThreadSelection(threadId);
+        navigator.vibrate?.(10);
+      }
+      return;
+    }
     openMenu("thread", { x: e.clientX, y: e.clientY }, { threadId });
-  }, [openMenu]);
+  }, [openMenu, compact]);
 
   const handleDraftClick = useCallback(async (thread: Thread) => {
     if (!activeAccountId) return;
@@ -482,18 +512,86 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
     return () => container.removeEventListener("scroll", handleScroll);
   }, [loadMore]);
 
+  const listTitle = isSmartFolder
+    ? activeSmartFolder?.name ?? "Smart Folder"
+    : activeLabel === "inbox" && inboxViewMode === "split" && activeCategory !== "All"
+      ? `Inbox — ${activeCategory}`
+      : LABEL_MAP[activeLabel] !== undefined
+        ? activeLabel === "all" ? "All mail" : activeLabel.charAt(0).toUpperCase() + activeLabel.slice(1)
+        : userLabels.find((l) => l.id === activeLabel)?.name ?? activeLabel;
+
+  // ---- Phone layout extras ----
+  const [snoozeTarget, setSnoozeTarget] = useState<Thread | null>(null);
+  const swipeEnabled = compact && !!activeAccountId && !NO_SWIPE_LABELS.has(activeLabel);
+  const { pull, refreshing } = usePullToRefresh(
+    scrollContainerRef,
+    async () => {
+      const ids = useAccountStore.getState().accounts.filter((a) => a.isActive).map((a) => a.id);
+      if (ids.length === 0) return;
+      const done = waitForSyncDone(20_000);
+      triggerSync(ids).catch(() => {});
+      await done;
+    },
+    compact,
+  );
+  const unreadCount = useMemo(() => filteredThreads.filter((t) => !t.isRead).length, [filteredThreads]);
+
+  const renderThreadCard = (thread: Thread, extra: { category?: string; showCategoryBadge?: boolean }) => {
+    const card = (
+      <ThreadCard
+        thread={thread}
+        isSelected={thread.id === selectedThreadId}
+        onClick={handleThreadClick}
+        onContextMenu={handleThreadContextMenu}
+        category={extra.category}
+        showCategoryBadge={extra.showCategoryBadge}
+        hasFollowUp={followUpThreadIds.has(thread.id)}
+      />
+    );
+    if (!swipeEnabled || multiSelectCount > 0) return card;
+    return (
+      <SwipeableRow
+        right={{
+          icon: Archive,
+          label: "Archive",
+          className: "bg-emerald-600",
+          onTrigger: () => activeAccountId && archiveThreadWithUndo(activeAccountId, thread),
+        }}
+        left={{
+          icon: Clock,
+          label: "Snooze",
+          className: "bg-amber-500",
+          onTrigger: () => setSnoozeTarget(thread),
+        }}
+      >
+        {card}
+      </SwipeableRow>
+    );
+  };
+
   return (
     <div
       ref={listRef}
-      className={`flex flex-col bg-bg-secondary/50 glass-panel ${
+      className={compact ? "relative flex flex-col flex-1 min-w-0 w-full bg-surface" : `flex flex-col bg-bg-secondary/50 glass-panel ${
         readingPanePosition === "right"
           ? "min-w-[240px] shrink-0"
           : readingPanePosition === "bottom"
             ? "w-full border-b border-border-primary h-[40%] min-h-[200px]"
             : "w-full flex-1"
       }`}
-      style={readingPanePosition === "right" && width ? { width } : undefined}
+      style={!compact && readingPanePosition === "right" && width ? { width } : undefined}
     >
+      {compact ? (
+        <MobileListHeader
+          title={listTitle}
+          count={filteredThreads.length}
+          unreadCount={unreadCount}
+          readFilter={readFilter}
+          onReadFilterChange={setReadFilter}
+          allowBulkDelete={activeLabel !== "trash"}
+        />
+      ) : (
+      <>
       {/* Search */}
       <div className="px-3 py-2 border-b border-border-secondary">
         <SearchBar />
@@ -526,6 +624,8 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
           <option value="read">Read</option>
         </select>
       </div>
+      </>
+      )}
 
       {/* Category tabs (inbox + split mode only) */}
       {activeLabel === "inbox" && inboxViewMode === "split" && (
@@ -537,7 +637,7 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
       )}
 
       {/* Multi-select action bar */}
-      <CSSTransition nodeRef={multiSelectBarRef} in={multiSelectCount > 0} timeout={150} classNames="slide-down" unmountOnExit>
+      <CSSTransition nodeRef={multiSelectBarRef} in={!compact && multiSelectCount > 0} timeout={150} classNames="slide-down" unmountOnExit>
         <div ref={multiSelectBarRef} className="px-3 py-2 border-b border-border-primary bg-accent/5 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-xs font-medium text-text-primary">
@@ -585,8 +685,28 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
         </div>
       </CSSTransition>
 
+      {/* Pull-to-refresh indicator (phone) */}
+      {compact && (pull > 0 || refreshing) && (
+        <div className="pointer-events-none absolute left-0 right-0 z-10 flex justify-center" style={{ top: `calc(var(--safe-top) + 7.5rem + ${pull * 0.6}px)` }}>
+          <div
+            className="w-10 h-10 rounded-full bg-bg-primary glass-modal border border-border-primary flex items-center justify-center text-accent"
+            style={{ opacity: Math.min(1, pull / PULL_TRIGGER + (refreshing ? 1 : 0)) }}
+          >
+            <RefreshCw
+              size={18}
+              className={refreshing ? "animate-spin" : ""}
+              style={refreshing ? undefined : { transform: `rotate(${pull * 3}deg)` }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Thread list */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
+      <div
+        ref={scrollContainerRef}
+        className={`flex-1 overflow-y-auto${compact ? " overscroll-contain pb-[calc(var(--safe-bottom)+6rem)]" : ""}`}
+        style={compact && pull > 0 ? { transform: `translateY(${pull * 0.4}px)` } : undefined}
+      >
         {isLoading && threads.length === 0 ? (
           <EmailListSkeleton />
         ) : filteredThreads.length === 0 && bundleRules.length === 0 ? (
@@ -643,14 +763,7 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
                   </button>
                   {isExpanded && bundledThreads.map((thread) => (
                     <div key={thread.id} className="pl-4">
-                      <ThreadCard
-                        thread={thread}
-                        isSelected={thread.id === selectedThreadId}
-                        onClick={handleThreadClick}
-                        onContextMenu={handleThreadContextMenu}
-                        category={rule.category}
-                        hasFollowUp={followUpThreadIds.has(thread.id)}
-                      />
+                      {renderThreadCard(thread, { category: rule.category })}
                     </div>
                   ))}
                 </div>
@@ -671,15 +784,10 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
                       Other emails
                     </div>
                   )}
-                  <ThreadCard
-                    thread={thread}
-                    isSelected={thread.id === selectedThreadId}
-                    onClick={handleThreadClick}
-                    onContextMenu={handleThreadContextMenu}
-                    category={categoryMap.get(thread.id)}
-                    showCategoryBadge={activeLabel === "inbox" && activeCategory === "All"}
-                    hasFollowUp={followUpThreadIds.has(thread.id)}
-                  />
+                  {renderThreadCard(thread, {
+                    category: categoryMap.get(thread.id),
+                    showCategoryBadge: activeLabel === "inbox" && activeCategory === "All",
+                  })}
                 </div>
               );
             })}
@@ -696,6 +804,31 @@ export function EmailList({ width, listRef }: { width?: number; listRef?: React.
           </>
         )}
       </div>
+
+      {compact && (
+        <>
+          {/* Compose FAB — hidden in selection mode, where the bar has the actions */}
+          {multiSelectCount === 0 && (
+            <button
+              onClick={() => openComposer()}
+              className="absolute right-4 bottom-[calc(var(--safe-bottom)+1rem)] z-20 h-14 pl-4 pr-5 rounded-2xl bg-accent text-white shadow-lg shadow-accent/30 flex items-center gap-3 font-medium text-[0.9375rem] active:scale-95 transition-transform"
+              aria-label="Compose"
+            >
+              <Pencil size={20} />
+              Compose
+            </button>
+          )}
+          <SnoozeDialog
+            isOpen={snoozeTarget !== null}
+            onSnooze={(until) => {
+              const t = snoozeTarget;
+              setSnoozeTarget(null);
+              if (t && activeAccountId) snoozeThreadWithUndo(activeAccountId, t, until);
+            }}
+            onClose={() => setSnoozeTarget(null)}
+          />
+        </>
+      )}
     </div>
   );
 }

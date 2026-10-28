@@ -6,18 +6,15 @@ import { useSmartFolderStore } from "@/stores/smartFolderStore";
 import { InputDialog } from "@/components/ui/InputDialog";
 import { Search, X, FolderPlus } from "lucide-react";
 
-export function SearchBar() {
+/**
+ * Debounced full-text search over the active account; results are written to
+ * threadStore (searchQuery / searchThreadIds). Shared by the desktop SearchBar
+ * and the phone list header.
+ */
+export function useMailSearch() {
   const searchQuery = useThreadStore((s) => s.searchQuery);
   const activeAccountId = useAccountStore((s) => s.activeAccountId);
-  const inputRef = useRef<HTMLInputElement | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const [showSaveModal, setShowSaveModal] = useState(false);
-
-  const handleSaveAsSmartFolder = useCallback(() => {
-    if (useThreadStore.getState().searchQuery.trim().length < 2) return;
-    setShowSaveModal(true);
-  }, []);
 
   const handleChange = useCallback(
     (value: string) => {
@@ -43,6 +40,25 @@ export function SearchBar() {
     },
     [activeAccountId],
   );
+
+  const clear = useCallback(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    useThreadStore.getState().clearSearch();
+  }, []);
+
+  return { searchQuery, activeAccountId, handleChange, clear };
+}
+
+export function SearchBar() {
+  const { searchQuery, activeAccountId, handleChange } = useMailSearch();
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  const [showSaveModal, setShowSaveModal] = useState(false);
+
+  const handleSaveAsSmartFolder = useCallback(() => {
+    if (useThreadStore.getState().searchQuery.trim().length < 2) return;
+    setShowSaveModal(true);
+  }, []);
 
   const handleClear = useCallback(() => {
     useThreadStore.getState().clearSearch();

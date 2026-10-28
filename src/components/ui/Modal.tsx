@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { CSSTransition } from "react-transition-group";
+import { useBackHandler } from "@/hooks/useBackHandler";
 
 interface ModalProps {
   isOpen: boolean;
@@ -27,6 +28,7 @@ export function Modal({
   renderHeader,
 }: ModalProps) {
   const nodeRef = useRef<HTMLDivElement>(null);
+  useBackHandler(isOpen, onClose);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -42,7 +44,7 @@ export function Modal({
       <div ref={nodeRef} className={`fixed inset-0 ${zIndex} flex items-center justify-center`} onContextMenu={(e) => e.stopPropagation()}>
         <div className="absolute inset-0 bg-black/20 glass-backdrop" onClick={onClose} />
         <div
-          className={`relative bg-bg-primary border border-border-primary rounded-lg glass-modal ${width}${panelClassName ? ` ${panelClassName}` : ""}`}
+          className={`relative bg-bg-primary border border-border-primary rounded-lg glass-modal ${width}${panelClassName ? ` ${panelClassName}` : ""} compact:rounded-2xl compact:max-w-[calc(100vw-1.5rem)] compact:max-h-[calc(100dvh-var(--safe-top)-var(--safe-bottom)-var(--keyboard-inset)-1.5rem)] compact:overflow-y-auto`}
         >
           {renderHeader !== undefined ? (
             renderHeader
@@ -51,7 +53,8 @@ export function Modal({
               <h3 className="text-sm font-semibold text-text-primary">{title}</h3>
               <button
                 onClick={onClose}
-                className="text-text-tertiary hover:text-text-primary text-lg leading-none"
+                aria-label="Close"
+                className="text-text-tertiary hover:text-text-primary text-lg leading-none compact:w-10 compact:h-10 compact:-mr-2 compact:text-2xl"
               >
                 ×
               </button>

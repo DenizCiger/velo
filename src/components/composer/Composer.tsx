@@ -4,7 +4,10 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import Image from "@tiptap/extension-image";
-import { Clock, Maximize2, Minimize2, ExternalLink } from "lucide-react";
+import { Clock, Maximize2, Minimize2, ExternalLink, X, SendHorizontal, Trash2 } from "lucide-react";
+import { useIsCompact } from "@/hooks/useLayoutMode";
+import { useBackHandler } from "@/hooks/useBackHandler";
+import { isMobilePlatform } from "@/utils/platform";
 
 import { Button } from "@/components/ui/Button";
 import { AddressInput } from "./AddressInput";
@@ -49,6 +52,9 @@ export function Composer() {
   // Note: bodyHtml intentionally NOT subscribed — TipTap manages its own editor state.
   // Subscribing would cause full re-renders on every keystroke.
   const closeComposer = useComposerStore((s) => s.closeComposer);
+  const compact = useIsCompact();
+  // Android Back closes the composer (the draft is auto-saved)
+  useBackHandler(isOpen, closeComposer);
   const setTo = useComposerStore((s) => s.setTo);
   const setCc = useComposerStore((s) => s.setCc);
   const setBcc = useComposerStore((s) => s.setBcc);
@@ -430,7 +436,7 @@ export function Composer() {
 
   return (
     <CSSTransition nodeRef={overlayRef} in={isOpen} timeout={200} classNames="slide-up" unmountOnExit>
-    <div ref={overlayRef} className={`fixed inset-0 z-50 flex ${isFullpage ? "items-stretch justify-center p-4" : "items-end justify-center pb-4"} pointer-events-none`}>
+    <div ref={overlayRef} className={`fixed inset-0 z-50 flex ${isFullpage ? "items-stretch justify-center p-4" : "items-end justify-center pb-4"} pointer-events-none compact:p-0 compact:items-stretch`}>
       {/* Backdrop */}
       <div
         className="absolute inset-0 pointer-events-auto backdrop-animate"
@@ -441,7 +447,7 @@ export function Composer() {
       <div
         className={`relative bg-bg-primary border rounded-lg glass-modal pointer-events-auto flex flex-col slide-up-panel ${
           isFullpage ? "w-full h-full max-w-5xl" : "w-full max-w-2xl max-h-[80vh]"
-        } ${isDragging ? "border-accent border-2" : "border-border-primary"}`}
+        } ${isDragging ? "border-accent border-2" : "border-border-primary"} compact:max-w-none compact:max-h-none compact:h-full compact:rounded-none compact:border-0 compact:bg-surface compact:pt-[var(--safe-top)] compact:pb-[calc(var(--safe-bottom)+var(--keyboard-inset))] compact:pl-[var(--safe-left)] compact:pr-[var(--safe-right)]`}
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
@@ -454,6 +460,37 @@ export function Composer() {
         )}
 
         {/* Header */}
+        {compact ? (
+          <div className="flex items-center gap-1 px-1 h-14 shrink-0 border-b border-border-secondary">
+            <button
+              onClick={closeComposer}
+              className="w-12 h-12 flex items-center justify-center rounded-full text-text-secondary active:bg-bg-hover"
+              aria-label="Close (draft is saved)"
+            >
+              <X size={22} />
+            </button>
+            <div className="flex-1 min-w-0">
+              <div className="text-base font-medium text-text-primary truncate">{modeLabel}</div>
+              {savedLabel && <div className="text-[0.6875rem] text-text-tertiary leading-tight">{savedLabel}</div>}
+            </div>
+            <button
+              onClick={() => setShowSchedule(true)}
+              disabled={to.length === 0}
+              className="w-12 h-12 flex items-center justify-center rounded-full text-text-secondary active:bg-bg-hover disabled:opacity-40"
+              aria-label="Schedule send"
+            >
+              <Clock size={20} />
+            </button>
+            <button
+              onClick={handleSend}
+              disabled={to.length === 0}
+              className="h-10 mr-2 pl-3.5 pr-4 rounded-full bg-accent text-white flex items-center gap-2 text-sm font-medium active:scale-95 transition-transform disabled:opacity-40"
+            >
+              <SendHorizontal size={18} />
+              Send
+            </button>
+          </div>
+        ) : (
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-border-primary bg-bg-secondary rounded-t-lg">
           <span className="text-sm font-medium text-text-primary">
             {modeLabel}
@@ -466,13 +503,15 @@ export function Composer() {
             >
               {isFullpage ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
             </button>
-            <button
-              onClick={handlePopOutComposer}
-              className="text-text-tertiary hover:text-text-primary p-1 rounded transition-colors"
-              title="Open in new window"
-            >
-              <ExternalLink size={14} />
-            </button>
+            {!isMobilePlatform() && (
+              <button
+                onClick={handlePopOutComposer}
+                className="text-text-tertiary hover:text-text-primary p-1 rounded transition-colors"
+                title="Open in new window"
+              >
+                <ExternalLink size={14} />
+              </button>
+            )}
             <button
               onClick={closeComposer}
               className="text-text-tertiary hover:text-text-primary text-lg leading-none p-1"
@@ -481,6 +520,7 @@ export function Composer() {
             </button>
           </div>
         </div>
+        )}
 
         {/* Address fields */}
         <div className="px-3 py-2 space-y-1.5 border-b border-border-secondary">
@@ -553,6 +593,20 @@ export function Composer() {
         </div>
 
         {/* Footer */}
+        {compact ? (
+          <div className="flex items-center gap-2 px-3 py-1.5 border-t border-border-secondary shrink-0">
+            <SignatureSelector />
+            <TemplatePicker editor={editor} />
+            <div className="flex-1" />
+            <button
+              onClick={handleDiscard}
+              className="w-11 h-11 flex items-center justify-center rounded-full text-text-secondary active:bg-bg-hover"
+              aria-label="Discard draft"
+            >
+              <Trash2 size={20} />
+            </button>
+          </div>
+        ) : (
         <div className="flex items-center justify-between px-4 py-2.5 border-t border-border-primary bg-bg-secondary rounded-b-lg">
           <div className="flex items-center gap-3">
             <div className="text-xs text-text-tertiary">
@@ -592,6 +646,7 @@ export function Composer() {
             </div>
           </div>
         </div>
+        )}
       </div>
 
       {showSchedule && (

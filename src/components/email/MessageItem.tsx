@@ -1,5 +1,6 @@
 import { memo, useState, useRef, useEffect, useMemo, forwardRef } from "react";
-import { formatFullDate } from "@/utils/date";
+import { formatFullDate, formatRelativeDate } from "@/utils/date";
+import { useIsCompact } from "@/hooks/useLayoutMode";
 import { EmailRenderer } from "./EmailRenderer";
 import { InlineAttachmentPreview } from "./InlineAttachmentPreview";
 import { AttachmentList, getAttachmentsForMessage } from "./AttachmentList";
@@ -22,6 +23,7 @@ interface MessageItemProps {
 }
 
 export const MessageItem = memo(forwardRef<HTMLDivElement, MessageItemProps>(function MessageItem({ message, isLast, blockImages, senderAllowlisted, accountId, threadId, isSpam, focused, onContextMenu }, ref) {
+  const compact = useIsCompact();
   const [expanded, setExpanded] = useState(isLast);
   const [attachments, setAttachments] = useState<DbAttachment[]>([]);
   const [authBannerDismissed, setAuthBannerDismissed] = useState(false);
@@ -100,7 +102,7 @@ export const MessageItem = memo(forwardRef<HTMLDivElement, MessageItemProps>(fun
             </div>
           </div>
           <span className="text-xs text-text-tertiary whitespace-nowrap shrink-0 ml-2">
-            {formatFullDate(message.date)}
+            {compact ? formatRelativeDate(message.date) : formatFullDate(message.date)}
           </span>
         </div>
         {expanded && (

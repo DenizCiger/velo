@@ -10,7 +10,7 @@ import { useContextMenuStore } from "@/stores/contextMenuStore";
 import { markThreadRead } from "@/services/emailActions";
 import { getSetting } from "@/services/db/settings";
 import { getAllowlistedSenders } from "@/services/db/imageAllowlist";
-import { VolumeX } from "lucide-react";
+import { VolumeX, Reply, ReplyAll, Forward } from "lucide-react";
 import { escapeHtml, sanitizeHtml } from "@/utils/sanitize";
 import { isNoReplyAddress } from "@/utils/noReply";
 import { ThreadSummary } from "./ThreadSummary";
@@ -22,6 +22,7 @@ import { AiTaskExtractDialog } from "@/components/tasks/AiTaskExtractDialog";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import { MessageSkeleton } from "@/components/ui/Skeleton";
 import { RawMessageModal } from "./RawMessageModal";
+import { useIsCompact } from "@/hooks/useLayoutMode";
 
 interface ThreadViewProps {
   thread: Thread;
@@ -59,9 +60,11 @@ async function handlePopOut(thread: Thread) {
 
 export function ThreadView({ thread }: ThreadViewProps) {
   const activeAccountId = useAccountStore((s) => s.activeAccountId);
-  const contactSidebarVisible = useUIStore((s) => s.contactSidebarVisible);
+  const compact = useIsCompact();
+  // Side panels don't fit on a phone; the phone action bar covers their actions
+  const contactSidebarVisible = useUIStore((s) => s.contactSidebarVisible) && !compact;
   const toggleContactSidebar = useUIStore((s) => s.toggleContactSidebar);
-  const taskSidebarVisible = useUIStore((s) => s.taskSidebarVisible);
+  const taskSidebarVisible = useUIStore((s) => s.taskSidebarVisible) && !compact;
   const [showTaskExtract, setShowTaskExtract] = useState(false);
   const updateThread = useThreadStore((s) => s.updateThread);
   const [messages, setMessages] = useState<DbMessage[]>([]);
@@ -379,7 +382,8 @@ export function ThreadView({ thread }: ThreadViewProps) {
 
   return (
     <div className="flex h-full @container relative">
-      <div className="flex flex-col flex-1 min-w-0">
+      {/* On phones the whole column scrolls (subject included) under a sticky action bar */}
+      <div className="flex flex-col flex-1 min-w-0 compact:overflow-y-auto compact:overscroll-contain">
         {/* Unified action bar */}
         <ActionBar
           thread={thread}
@@ -396,11 +400,12 @@ export function ThreadView({ thread }: ThreadViewProps) {
           onPopOut={() => handlePopOut(thread)}
           onToggleContactSidebar={toggleContactSidebar}
           onToggleTaskSidebar={() => useUIStore.getState().toggleTaskSidebar()}
+          variant={compact ? "mobile" : "default"}
         />
 
         {/* Thread subject */}
-        <div className="px-6 py-3 border-b border-border-primary">
-          <h1 className="text-lg font-semibold text-text-primary flex items-center gap-2">
+        <div className="px-6 py-3 border-b border-border-primary compact:px-4 compact:pt-1 compact:pb-3">
+          <h1 className="text-lg font-semibold text-text-primary flex items-center gap-2 compact:text-[1.375rem] compact:leading-snug compact:font-medium compact:items-start">
             {thread.subject ?? "(No subject)"}
             {thread.isMuted && (
               <span className="text-warning shrink-0" title="Muted">
@@ -423,7 +428,7 @@ export function ThreadView({ thread }: ThreadViewProps) {
         )}
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto compact:flex-none compact:overflow-visible compact:pb-[calc(var(--safe-bottom)+var(--keyboard-inset)+0.5rem)]">
           <ErrorBoundary name="MessageList">
             {messages.map((msg, i) => (
               <MessageItem
@@ -450,8 +455,29 @@ export function ThreadView({ thread }: ThreadViewProps) {
             />
           )}
 
+          {/* Phone: reply actions open the full-screen composer */}
+          {activeAccountId && compact && lastMessage && (
+            <div className="grid grid-cols-3 gap-2 px-4 pt-3 pb-4">
+              {[
+                { label: "Reply", icon: Reply, onClick: handleReply, disabled: noReply },
+                { label: "Reply all", icon: ReplyAll, onClick: handleReplyAll, disabled: noReply },
+                { label: "Forward", icon: Forward, onClick: handleForward, disabled: false },
+              ].map(({ label, icon: Icon, onClick, disabled }) => (
+                <button
+                  key={label}
+                  onClick={onClick}
+                  disabled={disabled}
+                  className="min-h-12 rounded-full border border-border-primary bg-bg-primary flex items-center justify-center gap-2 text-sm font-medium text-text-primary active:bg-bg-hover disabled:opacity-40"
+                >
+                  <Icon size={18} className="text-text-secondary" />
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Inline Reply */}
-          {activeAccountId && (
+          {activeAccountId && !compact && (
             <InlineReply
               thread={thread}
               messages={messages}

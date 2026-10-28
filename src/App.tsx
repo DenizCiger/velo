@@ -75,6 +75,11 @@ import { getThemeById, COLOR_THEMES } from "./constants/themes";
 import type { ColorThemeId } from "./constants/themes";
 import { router } from "./router";
 import { getSelectedThreadId } from "./router/navigate";
+import { isMobilePlatform } from "./utils/platform";
+import { useIsCompact } from "./hooks/useLayoutMode";
+import { useMobileShell } from "./hooks/useMobileShell";
+import { MobileDrawer } from "./components/mobile/MobileDrawer";
+import { UndoSnackbar } from "./components/mobile/UndoSnackbar";
 
 /**
  * Sync bridge: subscribes to router state changes and writes the selected
@@ -114,6 +119,18 @@ export default function App() {
 
   // Register global keyboard shortcuts
   useKeyboardShortcuts();
+
+  // Android: Back button, system bar insets/colours
+  useMobileShell();
+  const isMobile = isMobilePlatform();
+  const compact = useIsCompact();
+
+  // Phone layout: close the navigation drawer whenever the route changes
+  useEffect(() => {
+    return router.subscribe("onResolved", () => {
+      if (useUIStore.getState().mobileDrawerOpen) useUIStore.getState().setMobileDrawerOpen(false);
+    });
+  }, []);
 
   // Network status detection
   useEffect(() => {
@@ -335,8 +352,11 @@ export default function App() {
         startQueueProcessor();
         startPreCacheManager();
 
-        // Initialize notifications
-        await initNotifications();
+        // Initialize notifications. On phones, don't ask for the permission on a
+        // fresh install before there is any mail to notify about.
+        if (!isMobilePlatform() || mapped.length > 0) {
+          await initNotifications();
+        }
 
         // Initialize global compose shortcut
         await initGlobalShortcut();
@@ -505,6 +525,9 @@ export default function App() {
     // Re-initialize clients for the new account
     await initializeClients();
 
+    // First account on a phone: now is the time to ask for notifications
+    initNotifications().catch(() => {});
+
     const newest = mapped[mapped.length - 1];
     if (newest) {
       // Sync the new account immediately — before restarting the background
@@ -540,7 +563,10 @@ export default function App() {
   }
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden text-text-primary">
+    <div className={`flex flex-col h-screen overflow-hidden text-text-primary${
+      // Tablet-width mobile layouts keep the multi-pane UI; pad it clear of the system bars
+      isMobile && !compact ? " pt-[var(--safe-top)] pb-[var(--safe-bottom)] pl-[var(--safe-left)] pr-[var(--safe-right)]" : ""
+    }`}>
       <OfflineBanner />
       {/* Animated gradient blobs for glassmorphism effect */}
       <div className="animated-bg" aria-hidden="true">
@@ -550,15 +576,28 @@ export default function App() {
         <div className="blob" />
         <div className="blob" />
       </div>
-      <TitleBar />
+      {/* Custom window chrome is desktop-only; mobile has system bars */}
+      {!isMobile && <TitleBar />}
       <div className="flex flex-1 min-w-0 overflow-hidden">
         <DndProvider>
-          <ErrorBoundary name="Sidebar">
-            <Sidebar
-              collapsed={sidebarCollapsed}
-              onAddAccount={() => setShowAddAccount(true)}
-            />
-          </ErrorBoundary>
+          {compact ? (
+            <MobileDrawer>
+              <ErrorBoundary name="Sidebar">
+                <Sidebar
+                  collapsed={false}
+                  variant="drawer"
+                  onAddAccount={() => setShowAddAccount(true)}
+                />
+              </ErrorBoundary>
+            </MobileDrawer>
+          ) : (
+            <ErrorBoundary name="Sidebar">
+              <Sidebar
+                collapsed={sidebarCollapsed}
+                onAddAccount={() => setShowAddAccount(true)}
+              />
+            </ErrorBoundary>
+          )}
           <Outlet />
         </DndProvider>
       </div>
@@ -566,7 +605,7 @@ export default function App() {
       {/* Sync status bar */}
       {syncStatus && (
         <div
-          className={`fixed bottom-0 left-0 right-0 glass-panel text-white text-xs px-4 py-1.5 text-center z-40 animate-[slideUp_200ms_ease-out,fadeIn_200ms_ease-out] ${
+          className={`fixed bottom-0 left-0 right-0 glass-panel text-white text-xs px-4 py-1.5 text-center z-40 animate-[slideUp_200ms_ease-out,fadeIn_200ms_ease-out] compact:bottom-[calc(var(--safe-bottom)+5.5rem)] compact:left-4 compact:right-4 compact:rounded-full compact:py-2 compact:shadow-lg ${
             syncStatus.startsWith("Sync failed") ? "bg-danger/90" : "bg-accent/90"
           }`}
         >
@@ -585,6 +624,7 @@ export default function App() {
         <Composer />
       </ErrorBoundary>
       <UndoSendToast />
+      <UndoSnackbar />
       <UpdateToast />
       <ErrorBoundary name="CommandPalette">
         <CommandPalette

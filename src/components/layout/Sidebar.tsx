@@ -47,6 +47,8 @@ import { useTaskStore } from "@/stores/taskStore";
 interface SidebarProps {
   collapsed: boolean;
   onAddAccount: () => void;
+  /** "drawer": full-width content of the phone navigation drawer */
+  variant?: "default" | "drawer";
 }
 
 export const ALL_NAV_ITEMS: { id: string; label: string; icon: LucideIcon }[] = [
@@ -205,7 +207,8 @@ function getSmartFolderIcon(iconName: string): LucideIcon {
 
 const LABELS_COLLAPSED_COUNT = 3;
 
-export function Sidebar({ collapsed, onAddAccount }: SidebarProps) {
+export function Sidebar({ collapsed, onAddAccount, variant = "default" }: SidebarProps) {
+  const isDrawer = variant === "drawer";
   const activeLabel = useActiveLabel();
   const toggleSidebar = useUIStore((s) => s.toggleSidebar);
   const sidebarNavConfig = useUIStore((s) => s.sidebarNavConfig);
@@ -343,21 +346,25 @@ export function Sidebar({ collapsed, onAddAccount }: SidebarProps) {
 
   return (
     <aside
-      className={`no-select flex flex-col bg-sidebar-bg text-sidebar-text border-r border-border-primary transition-all duration-200 glass-panel ${
+      className={isDrawer
+        ? "sidebar-drawer no-select flex flex-col h-full w-full bg-surface text-sidebar-text pt-[var(--safe-top)] pb-[var(--safe-bottom)]"
+        : `no-select flex flex-col bg-sidebar-bg text-sidebar-text border-r border-border-primary transition-all duration-200 glass-panel ${
         collapsed ? "w-16" : "w-60"
       }`}
     >
       <AccountSwitcher collapsed={collapsed} onAddAccount={onAddAccount} />
 
-      {/* Compose button */}
-      <div className="px-3 py-2">
-        <button
-          onClick={() => openComposer()}
-          className="w-full flex items-center justify-center gap-2 bg-accent hover:bg-accent-hover text-white rounded-lg py-2 text-sm font-medium interactive-btn"
-        >
-          {collapsed ? <Plus size={16} /> : "Compose"}
-        </button>
-      </div>
+      {/* Compose button (the phone layout has a floating compose button instead) */}
+      {!isDrawer && (
+        <div className="px-3 py-2">
+          <button
+            onClick={() => openComposer()}
+            className="w-full flex items-center justify-center gap-2 bg-accent hover:bg-accent-hover text-white rounded-lg py-2 text-sm font-medium interactive-btn"
+          >
+            {collapsed ? <Plus size={16} /> : "Compose"}
+          </button>
+        </div>
+      )}
 
       <nav className="flex-1 overflow-y-auto py-2">
         {visibleNavItems.map((item) => {
@@ -630,13 +637,15 @@ export function Sidebar({ collapsed, onAddAccount }: SidebarProps) {
         >
           <HelpCircle size={18} className="shrink-0" />
         </button>
-        <button
-          onClick={toggleSidebar}
-          className="p-2 text-sidebar-text/60 hover:text-sidebar-text hover:bg-sidebar-hover rounded-md transition-colors"
-          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
-        </button>
+        {!isDrawer && (
+          <button
+            onClick={toggleSidebar}
+            className="p-2 text-sidebar-text/60 hover:text-sidebar-text hover:bg-sidebar-hover rounded-md transition-colors"
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+          </button>
+        )}
       </div>
 
       <InputDialog
