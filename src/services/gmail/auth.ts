@@ -60,6 +60,47 @@ function base64UrlEncode(bytes: Uint8Array): string {
 }
 
 /**
+ * On Android the consent screen runs in the system browser, so the app is in
+ * the background when the redirect lands. Network requests started from a
+ * backgrounded/frozen WebView fail with "Failed to fetch", so hold off until
+ * the user is back in the app. No-op on desktop, where the page stays visible.
+ */
+async function waitUntilVisible(): Promise<void> {
+  if (typeof document === "undefined" || document.visibilityState === "visible") return;
+  await new Promise<void>((resolve) => {
+    const onChange = () => {
+      if (document.visibilityState === "visible") {
+        document.removeEventListener("visibilitychange", onChange);
+        resolve();
+      }
+    };
+    document.addEventListener("visibilitychange", onChange);
+  });
+  // Give the network stack a moment to wake up after resuming
+  await new Promise((r) => setTimeout(r, 500));
+}
+
+/** fetch with a couple of retries for transient network failures (TypeError). */
+async function fetchWithRetry(
+  label: string,
+  input: string,
+  init?: RequestInit,
+  attempts = 3,
+): Promise<Response> {
+  let lastError: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fetch(input, init);
+    } catch (err) {
+      lastError = err;
+      if (i < attempts - 1) await new Promise((r) => setTimeout(r, 800));
+    }
+  }
+  const reason = lastError instanceof Error ? lastError.message : String(lastError);
+  throw new Error(`${label}: network request failed (${reason})`);
+}
+
+/**
  * Full OAuth2 + PKCE flow:
  * 1. Start localhost callback server (Rust side)
  * 2. Open browser to Google consent screen
@@ -114,6 +155,8 @@ export async function startOAuthFlow(
   // Wait for the redirect
   const result = await serverPromise;
 
+  await waitUntilVisible();
+
   // Validate state parameter (CSRF protection)
   if (result.state !== oauthState) {
     throw new Error("OAuth state mismatch — possible CSRF attack. Please try again.");
@@ -150,7 +193,7 @@ async function exchangeCodeForTokens(
   };
   if (clientSecret) params.client_secret = clientSecret;
 
-  const response = await fetch(GOOGLE_TOKEN_URL, {
+  const response = await fetchWithRetry("Token exchange", GOOGLE_TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams(params),
@@ -194,7 +237,8 @@ export async function refreshAccessToken(
 }
 
 async function fetchUserInfo(accessToken: string): Promise<UserInfo> {
-  const response = await fetch(
+  const response = await fetchWithRetry(
+    "Fetching profile",
     "https://www.googleapis.com/oauth2/v2/userinfo",
     {
       headers: { Authorization: `Bearer ${accessToken}` },
