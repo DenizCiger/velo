@@ -4,15 +4,27 @@ import {
   sendNotification,
   registerActionTypes,
   onAction,
+  createChannel,
+  Importance,
+  Visibility,
 } from "@tauri-apps/plugin-notification";
 import { getSetting } from "../db/settings";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { isMobilePlatform } from "@/utils/platform";
+import { getPlatform, isMobilePlatform } from "@/utils/platform";
 import { useComposerStore } from "../../stores/composerStore";
+import { useAccountStore } from "../../stores/accountStore";
 import { navigateToLabel } from "../../router/navigate";
 import { normalizeEmail } from "@/utils/emailUtils";
+import {
+  buildNewMailNotification,
+  resolveNotificationTarget,
+  NEW_MAIL_CHANNEL_ID,
+  type PendingMail,
+} from "./newMailNotification";
 
 let initialized = false;
+let handlersRegistered = false;
+let channelCreated = false;
 let notificationsEnabled = true;
 
 interface NotificationContext {
@@ -62,6 +74,57 @@ export async function initNotifications(): Promise<void> {
     return;
   }
 
+  await registerHandlers();
+}
+
+/**
+ * Re-check the OS permission without prompting (e.g. after the user granted it
+ * from Settings) and enable notifications if it is now granted.
+ */
+export async function refreshNotificationPermission(): Promise<boolean> {
+  const setting = await getSetting("notifications_enabled");
+  if (setting === "false") {
+    notificationsEnabled = false;
+    return false;
+  }
+  const granted = await isPermissionGranted();
+  notificationsEnabled = granted;
+  if (granted) await registerHandlers();
+  return granted;
+}
+
+async function ensureAndroidChannel(): Promise<void> {
+  if (channelCreated || getPlatform() !== "android") return;
+  try {
+    await createChannel({
+      id: NEW_MAIL_CHANNEL_ID,
+      name: "New mail",
+      description: "A notification for each new email in your inbox",
+      importance: Importance.High,
+      visibility: Visibility.Private,
+      vibration: true,
+      lights: true,
+    });
+    channelCreated = true;
+  } catch (err) {
+    console.warn("Failed to create notification channel:", err);
+  }
+}
+
+async function openThreadFromNotification(threadId: string, accountId?: string): Promise<void> {
+  const accounts = useAccountStore.getState();
+  if (accountId && accounts.activeAccountId !== accountId && accounts.accounts.some((a) => a.id === accountId)) {
+    accounts.setActiveAccount(accountId);
+  }
+  navigateToLabel("inbox", { threadId });
+}
+
+async function registerHandlers(): Promise<void> {
+  if (handlersRegistered) return;
+  handlersRegistered = true;
+
+  await ensureAndroidChannel();
+
   // Register action types and handlers (not available on all platforms)
   try {
     await registerActionTypes([
@@ -79,8 +142,11 @@ export async function initNotifications(): Promise<void> {
     ]);
 
     await onAction(async (event) => {
-      const actionId = event.actionTypeId;
-      const ctx = lastNotificationContext;
+      // Android delivers a tap as { actionId: "tap", notification: { extra } }
+      // and carries the thread in the notification itself.
+      const target = resolveNotificationTarget(event as unknown, lastNotificationContext);
+      const actionId = target.actionId;
+      const ctx = target.context;
 
       if (actionId === "reply" && ctx?.threadId && ctx?.accountId) {
         await showAndFocusMainWindow();
@@ -100,7 +166,9 @@ export async function initNotifications(): Promise<void> {
       } else {
         await showAndFocusMainWindow();
         if (ctx?.threadId) {
-          navigateToLabel("inbox", { threadId: ctx.threadId });
+          await openThreadFromNotification(ctx.threadId, ctx.accountId);
+        } else if (target.openInbox) {
+          navigateToLabel("inbox");
         }
       }
     });
@@ -113,7 +181,7 @@ export async function initNotifications(): Promise<void> {
  * Show a notification for new emails.
  * Batches notifications to avoid spam during sync.
  */
-let pendingCount = 0;
+let pending: PendingMail[] = [];
 let notifyTimer: ReturnType<typeof setTimeout> | null = null;
 
 export function queueNewEmailNotification(
@@ -125,7 +193,7 @@ export function queueNewEmailNotification(
 ): void {
   if (!notificationsEnabled) return;
 
-  pendingCount++;
+  pending.push({ from, subject, threadId, accountId });
 
   // Store context for action handling
   const ctx = { threadId, accountId, fromAddress, subject };
@@ -135,21 +203,11 @@ export function queueNewEmailNotification(
   // Debounce: wait 2s before showing, to batch during sync
   if (notifyTimer) clearTimeout(notifyTimer);
   notifyTimer = setTimeout(() => {
-    if (pendingCount === 1) {
-      sendNotification({
-        title: from,
-        body: subject || "(No subject)",
-        actionTypeId: "email",
-      });
-    } else if (pendingCount > 1) {
-      sendNotification({
-        title: "Velo",
-        body: `${pendingCount} new emails`,
-        actionTypeId: "email",
-      });
-    }
-    pendingCount = 0;
+    const batch = pending;
+    pending = [];
     notifyTimer = null;
+    const options = buildNewMailNotification(batch, getPlatform() === "android");
+    if (options) sendNotification(options);
   }, 2000);
 }
 
