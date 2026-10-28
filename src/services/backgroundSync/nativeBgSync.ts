@@ -20,9 +20,9 @@ export function isBackgroundSyncSupported(): boolean {
   return getPlatform() === "android";
 }
 
-async function call<T>(command: string, fallback: T): Promise<T> {
+async function call<T>(command: string, fallback: T, args?: Record<string, unknown>): Promise<T> {
   if (!isBackgroundSyncSupported()) return fallback;
-  return invoke<T>(`plugin:${PLUGIN}|${command}`);
+  return invoke<T>(`plugin:${PLUGIN}|${command}`, args);
 }
 
 const STOPPED: NativeBgSyncStatus = {
@@ -47,12 +47,37 @@ export const openNotificationSettings = () =>
 export const openAutostartSettings = () =>
   call<{ opened: "oem" | "app_settings" | "none" }>("open_autostart_settings", { opened: "none" });
 
-async function listen(event: string, cb: () => void): Promise<PluginListener | null> {
+/** A new-mail notification, posted natively so a tap can say which thread it was for. */
+export interface AndroidMailNotification {
+  id: number;
+  title: string;
+  body: string;
+  lines?: string[];
+  summary?: string;
+  threadId?: string;
+  accountId?: string;
+}
+
+export interface MailNotificationTap {
+  threadId?: string | null;
+  accountId?: string | null;
+}
+
+export const notifyNewMail = (n: AndroidMailNotification) =>
+  call<{ shown: boolean }>("notify_new_mail", { shown: false }, { ...n });
+/** A tap that launched the app before the listener below existed (cold start). */
+export const takePendingMailTap = async (): Promise<MailNotificationTap | null> =>
+  (await call<{ tap?: MailNotificationTap }>("take_pending_tap", {})).tap ?? null;
+
+async function listen<T = unknown>(event: string, cb: (payload: T) => void): Promise<PluginListener | null> {
   if (!isBackgroundSyncSupported()) return null;
-  return addPluginListener(PLUGIN, event, cb);
+  return addPluginListener<T>(PLUGIN, event, cb);
 }
 
 /** The service's wake-up alarm fired while the device slept: sync now. */
 export const onNativeSyncRequested = (cb: () => void) => listen("syncRequested", cb);
 /** The user tapped "Stop syncing" in the persistent notification. */
 export const onNativeStoppedByUser = (cb: () => void) => listen("stoppedByUser", cb);
+/** The user tapped a new-mail notification while the app was running. */
+export const onMailNotificationTapped = (cb: (tap: MailNotificationTap) => void) =>
+  listen<MailNotificationTap>("mailNotificationTapped", cb);

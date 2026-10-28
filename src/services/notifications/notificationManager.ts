@@ -4,9 +4,6 @@ import {
   sendNotification,
   registerActionTypes,
   onAction,
-  createChannel,
-  Importance,
-  Visibility,
 } from "@tauri-apps/plugin-notification";
 import { getSetting } from "../db/settings";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
@@ -15,16 +12,11 @@ import { useComposerStore } from "../../stores/composerStore";
 import { useAccountStore } from "../../stores/accountStore";
 import { navigateToLabel } from "../../router/navigate";
 import { normalizeEmail } from "@/utils/emailUtils";
-import {
-  buildNewMailNotification,
-  resolveNotificationTarget,
-  NEW_MAIL_CHANNEL_ID,
-  type PendingMail,
-} from "./newMailNotification";
+import { buildAndroidMailNotification, buildDesktopMailNotification, type PendingMail } from "./newMailNotification";
+import { notifyNewMail, onMailNotificationTapped, takePendingMailTap } from "../backgroundSync/nativeBgSync";
 
 let initialized = false;
 let handlersRegistered = false;
-let channelCreated = false;
 let notificationsEnabled = true;
 
 interface NotificationContext {
@@ -93,25 +85,7 @@ export async function refreshNotificationPermission(): Promise<boolean> {
   return granted;
 }
 
-async function ensureAndroidChannel(): Promise<void> {
-  if (channelCreated || getPlatform() !== "android") return;
-  try {
-    await createChannel({
-      id: NEW_MAIL_CHANNEL_ID,
-      name: "New mail",
-      description: "A notification for each new email in your inbox",
-      importance: Importance.High,
-      visibility: Visibility.Private,
-      vibration: true,
-      lights: true,
-    });
-    channelCreated = true;
-  } catch (err) {
-    console.warn("Failed to create notification channel:", err);
-  }
-}
-
-async function openThreadFromNotification(threadId: string, accountId?: string): Promise<void> {
+function openThreadFromNotification(threadId: string, accountId?: string): void {
   const accounts = useAccountStore.getState();
   if (accountId && accounts.activeAccountId !== accountId && accounts.accounts.some((a) => a.id === accountId)) {
     accounts.setActiveAccount(accountId);
@@ -123,7 +97,20 @@ async function registerHandlers(): Promise<void> {
   if (handlersRegistered) return;
   handlersRegistered = true;
 
-  await ensureAndroidChannel();
+  if (getPlatform() === "android") {
+    // New-mail notifications are posted by the bg-sync plugin on Android; it
+    // reports which one was tapped (incl. a tap that cold-started the app).
+    const open = (tap: { threadId?: string | null; accountId?: string | null } | null | undefined) => {
+      if (tap?.threadId) openThreadFromNotification(tap.threadId, tap.accountId ?? undefined);
+      else if (tap) navigateToLabel("inbox");
+    };
+    try {
+      await onMailNotificationTapped(open);
+      open(await takePendingMailTap());
+    } catch (err) {
+      console.warn("Notification tap handling unavailable:", err);
+    }
+  }
 
   // Register action types and handlers (not available on all platforms)
   try {
@@ -142,11 +129,8 @@ async function registerHandlers(): Promise<void> {
     ]);
 
     await onAction(async (event) => {
-      // Android delivers a tap as { actionId: "tap", notification: { extra } }
-      // and carries the thread in the notification itself.
-      const target = resolveNotificationTarget(event as unknown, lastNotificationContext);
-      const actionId = target.actionId;
-      const ctx = target.context;
+      const actionId = event.actionTypeId;
+      const ctx = lastNotificationContext;
 
       if (actionId === "reply" && ctx?.threadId && ctx?.accountId) {
         await showAndFocusMainWindow();
@@ -166,9 +150,7 @@ async function registerHandlers(): Promise<void> {
       } else {
         await showAndFocusMainWindow();
         if (ctx?.threadId) {
-          await openThreadFromNotification(ctx.threadId, ctx.accountId);
-        } else if (target.openInbox) {
-          navigateToLabel("inbox");
+          navigateToLabel("inbox", { threadId: ctx.threadId });
         }
       }
     });
@@ -206,8 +188,13 @@ export function queueNewEmailNotification(
     const batch = pending;
     pending = [];
     notifyTimer = null;
-    const options = buildNewMailNotification(batch, getPlatform() === "android");
-    if (options) sendNotification(options);
+    if (getPlatform() === "android") {
+      const n = buildAndroidMailNotification(batch);
+      if (n) notifyNewMail(n).catch((err) => console.warn("Failed to show notification:", err));
+    } else {
+      const options = buildDesktopMailNotification(batch);
+      if (options) sendNotification(options);
+    }
   }, 2000);
 }
 

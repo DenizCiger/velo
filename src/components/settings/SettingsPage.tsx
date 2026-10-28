@@ -2261,7 +2261,11 @@ function BackgroundSyncSection() {
       setStatus(st);
       if (next && !st.notificationsEnabled && !deniedAfterAsking) await askNotificationPermission();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      // Plugin rejections arrive as plain strings or { message } objects
+      const msg = err instanceof Error ? err.message
+        : typeof err === "object" && err && "message" in err ? String((err as { message: unknown }).message)
+        : String(err);
+      setError(msg);
       await refresh();
     } finally {
       setBusy(false);

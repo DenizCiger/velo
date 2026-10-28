@@ -1,7 +1,6 @@
 import {
-  buildNewMailNotification,
-  NEW_MAIL_CHANNEL_ID,
-  resolveNotificationTarget,
+  buildAndroidMailNotification,
+  buildDesktopMailNotification,
   SUMMARY_NOTIFICATION_ID,
   threadNotificationId,
 } from "./newMailNotification";
@@ -14,14 +13,14 @@ const mail = (n: number, over: Record<string, string> = {}) => ({
   ...over,
 });
 
-describe("buildNewMailNotification (desktop)", () => {
+describe("buildDesktopMailNotification", () => {
   it("keeps the original single and batch toasts", () => {
-    expect(buildNewMailNotification([mail(1)], false)).toEqual({
+    expect(buildDesktopMailNotification([mail(1)])).toEqual({
       title: "Sender 1",
       body: "Subject 1",
       actionTypeId: "email",
     });
-    expect(buildNewMailNotification([mail(1), mail(2)], false)).toEqual({
+    expect(buildDesktopMailNotification([mail(1), mail(2)])).toEqual({
       title: "Velo",
       body: "2 new emails",
       actionTypeId: "email",
@@ -29,45 +28,47 @@ describe("buildNewMailNotification (desktop)", () => {
   });
 
   it("returns null for an empty batch", () => {
-    expect(buildNewMailNotification([], false)).toBeNull();
-    expect(buildNewMailNotification([], true)).toBeNull();
+    expect(buildDesktopMailNotification([])).toBeNull();
+    expect(buildAndroidMailNotification([])).toBeNull();
   });
 
   it("uses a placeholder for empty subjects", () => {
-    expect(buildNewMailNotification([mail(1, { subject: "" })], false)?.body).toBe("(No subject)");
+    expect(buildDesktopMailNotification([mail(1, { subject: "" })])?.body).toBe("(No subject)");
   });
 });
 
-describe("buildNewMailNotification (android)", () => {
+describe("buildAndroidMailNotification", () => {
   it("targets the thread for a single message", () => {
-    const n = buildNewMailNotification([mail(1)], true)!;
-    expect(n.channelId).toBe(NEW_MAIL_CHANNEL_ID);
-    expect(n.id).toBe(threadNotificationId("t1"));
-    expect(n.extra).toEqual({ threadId: "t1", accountId: "acc1" });
-    expect(n.title).toBe("Sender 1");
-    expect(n.actionTypeId).toBeUndefined();
-    expect(n.group).toBeTruthy();
+    expect(buildAndroidMailNotification([mail(1)])).toEqual({
+      id: threadNotificationId("t1"),
+      title: "Sender 1",
+      body: "Subject 1",
+      threadId: "t1",
+      accountId: "acc1",
+    });
   });
 
-  it("summarises a burst in one replaceable notification", () => {
+  it("summarises a burst in one replaceable notification that opens the inbox", () => {
     const batch = Array.from({ length: 8 }, (_, i) => mail(i + 1));
-    const n = buildNewMailNotification(batch, true)!;
+    const n = buildAndroidMailNotification(batch)!;
     expect(n.id).toBe(SUMMARY_NOTIFICATION_ID);
     expect(n.title).toBe("8 new emails");
-    expect(n.inboxLines).toHaveLength(6);
+    expect(n.lines).toHaveLength(6);
     expect(n.summary).toBe("+2 more");
-    // several threads: a tap opens the inbox, not one thread
-    expect(n.extra).toEqual({ accountId: "acc1" });
+    expect(n.threadId).toBeUndefined();
+    expect(n.accountId).toBe("acc1");
   });
 
   it("opens the thread when a burst is all in one thread", () => {
-    const n = buildNewMailNotification([mail(1), mail(2, { threadId: "t1" })], true)!;
-    expect(n.extra).toEqual({ threadId: "t1", accountId: "acc1" });
+    const n = buildAndroidMailNotification([mail(1), mail(2, { threadId: "t1" })])!;
+    expect(n.threadId).toBe("t1");
+    expect(n.summary).toBeUndefined();
   });
 
   it("drops the account when the burst spans accounts", () => {
-    const n = buildNewMailNotification([mail(1), mail(2, { accountId: "acc2" })], true)!;
-    expect(n.extra).toEqual({});
+    const n = buildAndroidMailNotification([mail(1), mail(2, { accountId: "acc2" })])!;
+    expect(n.accountId).toBeUndefined();
+    expect(n.body).toBe("Sender 1, Sender 2");
   });
 });
 
@@ -81,32 +82,5 @@ describe("threadNotificationId", () => {
       expect(v).toBeLessThanOrEqual(0x7fffffff);
       expect(v >= 0x7e00 && v <= 0x7eff).toBe(false);
     }
-  });
-});
-
-describe("resolveNotificationTarget", () => {
-  const fallback = { threadId: "last", accountId: "accX" };
-
-  it("reads the thread from an Android tap", () => {
-    const t = resolveNotificationTarget(
-      { actionId: "tap", notification: { extra: { threadId: "t9", accountId: "acc1" } } },
-      fallback,
-    );
-    expect(t).toEqual({ actionId: "tap", context: { threadId: "t9", accountId: "acc1" }, openInbox: false });
-  });
-
-  it("opens the inbox for an Android summary tap", () => {
-    const t = resolveNotificationTarget({ actionId: "tap", notification: { extra: { accountId: "acc1" } } }, fallback);
-    expect(t.openInbox).toBe(true);
-    expect(t.context).toEqual({ threadId: undefined, accountId: "acc1" });
-  });
-
-  it("falls back to the last notification elsewhere", () => {
-    const t = resolveNotificationTarget({ actionTypeId: "reply" }, fallback);
-    expect(t).toEqual({ actionId: "reply", context: fallback, openInbox: false });
-  });
-
-  it("tolerates junk events", () => {
-    expect(resolveNotificationTarget(null, null)).toEqual({ actionId: undefined, context: null, openInbox: false });
   });
 });
