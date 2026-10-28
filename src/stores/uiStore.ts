@@ -36,6 +36,8 @@ interface UIState {
   isOnline: boolean;
   pendingOpsCount: number;
   isSyncingFolder: string | null;
+  /** Phone layout: navigation drawer visibility (not persisted). */
+  mobileDrawerOpen: boolean;
   setTheme: (theme: Theme) => void;
   toggleSidebar: () => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
@@ -59,6 +61,7 @@ interface UIState {
   setOnline: (online: boolean) => void;
   setPendingOpsCount: (count: number) => void;
   setSyncingFolder: (folder: string | null) => void;
+  setMobileDrawerOpen: (open: boolean) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -81,6 +84,7 @@ export const useUIStore = create<UIState>((set) => ({
   isOnline: true,
   pendingOpsCount: 0,
   isSyncingFolder: null,
+  mobileDrawerOpen: false,
 
   setTheme: (theme) => set({ theme }),
   toggleSidebar: () =>
@@ -156,4 +160,5 @@ export const useUIStore = create<UIState>((set) => ({
   setOnline: (isOnline) => set({ isOnline }),
   setPendingOpsCount: (pendingOpsCount) => set({ pendingOpsCount }),
   setSyncingFolder: (isSyncingFolder) => set({ isSyncingFolder }),
+  setMobileDrawerOpen: (mobileDrawerOpen) => set({ mobileDrawerOpen }),
 }));
