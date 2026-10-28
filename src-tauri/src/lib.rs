@@ -3,7 +3,9 @@ use tauri::{
     menu::{Menu, MenuItem},
     tray::{TrayIconBuilder, TrayIconId},
 };
-use tauri::{Emitter, Manager};
+#[cfg(desktop)]
+use tauri::Emitter;
+use tauri::Manager;
 #[cfg(desktop)]
 use tauri_plugin_autostart::MacosLauncher;
 
@@ -14,9 +16,14 @@ mod smtp;
 
 #[tauri::command]
 fn close_splashscreen(app: tauri::AppHandle) {
+    // Mobile has a single always-visible window and no splash screen.
+    #[cfg(mobile)]
+    let _ = app;
+    #[cfg(desktop)]
     if let Some(w) = app.get_webview_window("splashscreen") {
         let _ = w.close();
     }
+    #[cfg(desktop)]
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.show();
         let _ = w.set_focus();
