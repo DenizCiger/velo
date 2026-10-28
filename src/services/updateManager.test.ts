@@ -19,8 +19,11 @@ import {
   setUpdateCallback,
   _resetForTesting,
 } from "./updateManager";
+import { __setPlatformForTests } from "@/utils/platform";
 
 beforeEach(() => {
+  // The updater is desktop-only; jsdom would otherwise resolve to "web"
+  __setPlatformForTests("linux");
   _resetForTesting();
   mockCheck.mockReset();
   mockRelaunch.mockReset();

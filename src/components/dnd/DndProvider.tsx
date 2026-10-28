@@ -1,3 +1,4 @@
+import { isMobilePlatform } from "@/utils/platform";
 import { useState, type ReactNode } from "react";
 import {
   DndContext,
@@ -69,11 +70,12 @@ export function DndProvider({ children }: DndProviderProps) {
   const removeThreads = useThreadStore((s) => s.removeThreads);
   const activeAccountId = useAccountStore((s) => s.activeAccountId);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: { distance: 8 },
-    }),
-  );
+  const pointerSensor = useSensor(PointerSensor, {
+    activationConstraint: { distance: 8 },
+  });
+  // Drag-to-label is a mouse interaction. On touch devices a drag would hijack
+  // list scrolling and swipe actions, so no sensors are active on mobile.
+  const sensors = useSensors(...(isMobilePlatform() ? [] : [pointerSensor]));
 
   const handleDragStart = (event: DragStartEvent) => {
     const data = event.active.data.current as DragData | undefined;

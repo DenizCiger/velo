@@ -1,5 +1,6 @@
 import { createBackgroundChecker } from "./backgroundCheckers";
 import type { BackgroundChecker } from "./backgroundCheckers";
+import { isDesktopPlatform } from "../utils/platform";
 
 interface UpdateInfo {
   version: string;
@@ -27,7 +28,8 @@ async function performCheck(): Promise<void> {
 const FOUR_HOURS = 4 * 60 * 60 * 1000;
 
 export function startUpdateChecker(): void {
-  if (checker) return;
+  // The updater plugin only exists in desktop builds; mobile updates come from APK installs
+  if (checker || !isDesktopPlatform()) return;
   checker = createBackgroundChecker("update-checker", performCheck, FOUR_HOURS);
   checker.start();
 }
@@ -38,6 +40,7 @@ export function stopUpdateChecker(): void {
 }
 
 export async function checkForUpdateNow(): Promise<UpdateInfo | null> {
+  if (!isDesktopPlatform()) return null;
   await performCheck();
   return availableUpdate?.info ?? null;
 }

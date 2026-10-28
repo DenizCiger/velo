@@ -1,6 +1,7 @@
 import { register, unregister, isRegistered } from "@tauri-apps/plugin-global-shortcut";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { getSetting, setSetting } from "./db/settings";
+import { isDesktopPlatform } from "../utils/platform";
 import { useComposerStore } from "../stores/composerStore";
 
 const DEFAULT_SHORTCUT = "CmdOrCtrl+Shift+M";
@@ -16,6 +17,8 @@ async function handleComposeShortcut(): Promise<void> {
 }
 
 export async function initGlobalShortcut(): Promise<void> {
+  // System-wide shortcuts only exist on desktop (plugin not registered on mobile)
+  if (!isDesktopPlatform()) return;
   const saved = await getSetting("global_compose_shortcut");
   const shortcut = saved ?? DEFAULT_SHORTCUT;
 
@@ -31,6 +34,7 @@ export async function initGlobalShortcut(): Promise<void> {
 }
 
 export async function registerComposeShortcut(shortcut: string): Promise<void> {
+  if (!isDesktopPlatform()) return;
   if (currentShortcut) {
     try {
       await unregister(currentShortcut);

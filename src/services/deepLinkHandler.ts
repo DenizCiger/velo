@@ -4,17 +4,24 @@ import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { parseMailtoUrl } from "../utils/mailtoParser";
 import { useComposerStore } from "../stores/composerStore";
 import { escapeHtml } from "../utils/sanitize";
+import { isMobilePlatform } from "../utils/platform";
 
 async function handleUrl(url: string): Promise<void> {
   if (!url.startsWith("mailto:")) return;
 
   const fields = parseMailtoUrl(url);
 
-  // Show and focus the main window
-  const mainWindow = await WebviewWindow.getByLabel("main");
-  if (mainWindow) {
-    await mainWindow.show();
-    await mainWindow.setFocus();
+  // Show and focus the main window (desktop only; must not block the composer)
+  if (!isMobilePlatform()) {
+    try {
+      const mainWindow = await WebviewWindow.getByLabel("main");
+      if (mainWindow) {
+        await mainWindow.show();
+        await mainWindow.setFocus();
+      }
+    } catch (err) {
+      console.warn("Failed to focus main window:", err);
+    }
   }
 
   // Open composer with parsed fields

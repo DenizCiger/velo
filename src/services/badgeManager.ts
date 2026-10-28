@@ -1,6 +1,7 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import { getUnreadInboxCount } from "./db/threads";
+import { isMobilePlatform } from "../utils/platform";
 
 let lastCount = -1;
 
@@ -9,6 +10,9 @@ export async function updateBadgeCount(): Promise<void> {
     const count = await getUnreadInboxCount();
     if (count === lastCount) return;
     lastCount = count;
+
+    // No window badge or tray on mobile
+    if (isMobilePlatform()) return;
 
     try {
       await getCurrentWindow().setBadgeCount(count > 0 ? count : undefined);

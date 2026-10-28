@@ -7,6 +7,7 @@ import {
 } from "@tauri-apps/plugin-notification";
 import { getSetting } from "../db/settings";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { isMobilePlatform } from "@/utils/platform";
 import { useComposerStore } from "../../stores/composerStore";
 import { navigateToLabel } from "../../router/navigate";
 import { normalizeEmail } from "@/utils/emailUtils";
@@ -25,10 +26,16 @@ let lastNotificationContext: NotificationContext | null = null;
 const recentContexts = new Map<string, NotificationContext>();
 
 async function showAndFocusMainWindow(): Promise<void> {
-  const mainWindow = await WebviewWindow.getByLabel("main");
-  if (mainWindow) {
-    await mainWindow.show();
-    await mainWindow.setFocus();
+  // Mobile has a single always-visible window
+  if (isMobilePlatform()) return;
+  try {
+    const mainWindow = await WebviewWindow.getByLabel("main");
+    if (mainWindow) {
+      await mainWindow.show();
+      await mainWindow.setFocus();
+    }
+  } catch (err) {
+    console.warn("Failed to focus main window:", err);
   }
 }
 
