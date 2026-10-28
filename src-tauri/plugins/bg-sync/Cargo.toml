@@ -1,0 +1,14 @@
+[package]
+name = "tauri-plugin-bg-sync"
+version = "0.1.0"
+description = "Android foreground service that keeps Velo's webview (and its sync loop) alive in the background"
+edition = "2021"
+rust-version = "1.77.2"
+publish = false
+links = "tauri-plugin-bg-sync"
+
+[dependencies]
+tauri = { version = "2.10.0", default-features = false }
+
+[build-dependencies]
+tauri-plugin = { version = "2.5", features = ["build"] }

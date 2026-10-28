@@ -100,7 +100,9 @@ pub fn run() {
     // Must come right after the SQL plugin: swaps its preloaded pool for a
     // single-connection one before any webview runs a query.
     #[cfg(mobile)]
-    let builder = builder.plugin(db_pool::init());
+    let builder = builder
+        .plugin(db_pool::init())
+        .plugin(tauri_plugin_bg_sync::init());
 
     builder
         .plugin(tauri_plugin_notification::init())
