@@ -53,6 +53,8 @@ import {
   stopBackgroundSync,
   triggerSync,
   onSyncStatus,
+  onSyncCycleDone,
+  syncAllNow,
 } from "./syncManager";
 import { getAccount } from "../db/accounts";
 import { getGmailClient } from "./tokenManager";
@@ -296,6 +298,35 @@ describe("syncManager", () => {
 
       expect(errors).toHaveLength(1);
       expect(errors[0]).toBe("Unknown error");
+    });
+  });
+
+  describe("syncAllNow / onSyncCycleDone", () => {
+    it("syncs the background accounts and reports each finished cycle once", async () => {
+      const a1 = makeGmailAccount("a1", "100");
+      mockGetAccount.mockResolvedValue(a1);
+      const done = vi.fn();
+      const unsub = onSyncCycleDone(done);
+
+      startBackgroundSync(["a1"], true);
+      await syncAllNow();
+
+      expect(mockDeltaSync).toHaveBeenCalledTimes(1);
+      expect(done).toHaveBeenCalledTimes(1);
+
+      unsub();
+      await syncAllNow();
+      expect(done).toHaveBeenCalledTimes(1);
+    });
+
+    it("reports a cycle even when the sync failed", async () => {
+      mockGetAccount.mockResolvedValue(makeGmailAccount("a1", "100"));
+      mockDeltaSync.mockRejectedValueOnce(new Error("offline"));
+      const done = vi.fn();
+      const unsub = onSyncCycleDone(done);
+      await triggerSync(["a1"]);
+      expect(done).toHaveBeenCalledTimes(1);
+      unsub();
     });
   });
 });

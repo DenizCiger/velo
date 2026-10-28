@@ -25,6 +25,18 @@ function mapImapPhase(phase: string): "labels" | "threads" | "messages" | "done"
 let syncTimer: ReturnType<typeof setInterval> | null = null;
 let syncPromise: Promise<void> | null = null;
 let pendingAccountIds: string[] | null = null;
+/** Accounts the periodic timer syncs (used by `syncAllNow`). */
+let backgroundAccountIds: string[] = [];
+
+const cycleDoneListeners = new Set<() => void>();
+
+/** Called after every sync run (all queued accounts done), success or not. */
+export function onSyncCycleDone(cb: () => void): () => void {
+  cycleDoneListeners.add(cb);
+  return () => {
+    cycleDoneListeners.delete(cb);
+  };
+}
 
 export type SyncStatusCallback = (
   accountId: string,
@@ -273,6 +285,15 @@ async function runSync(accountIds: string[]): Promise<void> {
       const queued = pendingAccountIds;
       pendingAccountIds = null;
       await runSync(queued);
+      return;
+    }
+
+    for (const cb of cycleDoneListeners) {
+      try {
+        cb();
+      } catch (err) {
+        console.warn("[syncManager] sync-cycle listener failed:", err);
+      }
     }
   })();
 
@@ -294,6 +315,7 @@ export async function syncAccount(accountId: string): Promise<void> {
  */
 export function startBackgroundSync(accountIds: string[], skipImmediateSync = false): void {
   stopBackgroundSync();
+  backgroundAccountIds = accountIds;
 
   if (!skipImmediateSync) {
     // Immediate sync
@@ -314,6 +336,15 @@ export function stopBackgroundSync(): void {
     clearInterval(syncTimer);
     syncTimer = null;
   }
+}
+
+/**
+ * Sync every account the background timer covers, now (e.g. when Android's
+ * background-sync alarm wakes the device). No-op before the timer started.
+ */
+export async function syncAllNow(): Promise<void> {
+  if (backgroundAccountIds.length === 0) return;
+  await runSync(backgroundAccountIds);
 }
 
 /**
