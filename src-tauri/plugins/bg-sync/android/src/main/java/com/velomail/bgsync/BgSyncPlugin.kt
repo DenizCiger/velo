@@ -7,9 +7,12 @@ import android.content.ComponentName
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
+import android.view.View
 import android.webkit.WebView
 import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.Lifecycle
@@ -25,6 +28,7 @@ class BgSyncPlugin(private val activity: Activity) : Plugin(activity) {
   companion object {
     private const val EVENT_SYNC = "syncRequested"
     private const val EVENT_STOPPED = "stoppedByUser"
+    private const val EVENT_MAIL_TAPPED = "mailNotificationTapped"
 
     @Volatile
     private var instance: BgSyncPlugin? = null
@@ -45,9 +49,71 @@ class BgSyncPlugin(private val activity: Activity) : Plugin(activity) {
     }
   }
 
+  private var webView: WebView? = null
+  private val handler = Handler(Looper.getMainLooper())
+
+  /** A new-mail tap that launched the activity before JS could listen (cold start). */
+  private var pendingTap: JSObject? = null
+
   override fun load(webView: WebView) {
     super.load(webView)
+    this.webView = webView
     instance = this
+    activity.intent?.let { pendingTap = consumeMailTap(it) }
+    if (pendingTap != null) Log.d(BgSyncService.TAG, "launched from a new-mail notification")
+  }
+
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    val tap = consumeMailTap(intent) ?: return
+    if (hasListener(EVENT_MAIL_TAPPED)) trigger(EVENT_MAIL_TAPPED, tap) else pendingTap = tap
+  }
+
+  private fun consumeMailTap(intent: Intent): JSObject? {
+    if (!intent.getBooleanExtra(MailNotifier.EXTRA_TAPPED, false)) return null
+    val tap = JSObject()
+      .put("threadId", intent.getStringExtra(MailNotifier.EXTRA_THREAD_ID))
+      .put("accountId", intent.getStringExtra(MailNotifier.EXTRA_ACCOUNT_ID))
+    // Don't replay the tap if the activity is recreated with the same intent
+    intent.removeExtra(MailNotifier.EXTRA_TAPPED)
+    return tap
+  }
+
+  @Command
+  fun notifyNewMail(invoke: Invoke) {
+    val args = invoke.parseArgs(NewMailArgs::class.java)
+    invoke.resolve(JSObject().put("shown", MailNotifier.post(activity.applicationContext, args)))
+  }
+
+  @Command
+  fun takePendingTap(invoke: Invoke) {
+    val tap = pendingTap
+    pendingTap = null
+    invoke.resolve(JSObject().put("tap", tap))
+  }
+
+  /**
+   * Keeping the process alive is not enough: ~60s after the activity stops,
+   * Chromium suspends the hidden page's timers and message queues (measured on
+   * the emulator: the 60s sync interval stopped firing while the process sat
+   * unfrozen at foreground-service priority, and a 100ms setTimeout never
+   * resolved). The WebView derives "hidden" from its window visibility, so
+   * while background sync runs, tell it its window is still visible. There is
+   * no surface to draw to, so this does not cause rendering work.
+   */
+  override fun onStop() {
+    super.onStop()
+    // Posted: the system dispatches the INVISIBLE window visibility around onStop.
+    handler.postDelayed({ keepPageAwake() }, 500)
+  }
+
+  private fun keepPageAwake() {
+    val wv = webView ?: return
+    val stopped = (activity as? LifecycleOwner)?.lifecycle?.currentState?.isAtLeast(Lifecycle.State.STARTED) == false
+    if (BgSyncService.running && stopped) {
+      wv.dispatchWindowVisibilityChanged(View.VISIBLE)
+      Log.d(BgSyncService.TAG, "keeping webview active in background")
+    }
   }
 
   override fun onDestroy() {

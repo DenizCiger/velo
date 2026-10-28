@@ -1,6 +1,6 @@
 ## Default Permission
 
-Allows controlling the background sync service and its helper settings screens.
+Allows controlling the background sync service, posting new-mail notifications and opening the related settings screens.
 
 #### This default permission set includes the following:
 
@@ -8,6 +8,8 @@ Allows controlling the background sync service and its helper settings screens.
 - `allow-stop`
 - `allow-status`
 - `allow-sync-done`
+- `allow-notify-new-mail`
+- `allow-take-pending-tap`
 - `allow-request-ignore-battery-optimizations`
 - `allow-open-notification-settings`
 - `allow-open-autostart-settings`
@@ -22,6 +24,32 @@ Allows controlling the background sync service and its helper settings screens.
 <th>Description</th>
 </tr>
 
+
+<tr>
+<td>
+
+`bg-sync:allow-notify-new-mail`
+
+</td>
+<td>
+
+Enables the notify_new_mail command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`bg-sync:deny-notify-new-mail`
+
+</td>
+<td>
+
+Denies the notify_new_mail command without any pre-configured scope.
+
+</td>
+</tr>
 
 <tr>
 <td>
@@ -253,6 +281,32 @@ Enables the sync_done command without any pre-configured scope.
 <td>
 
 Denies the sync_done command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`bg-sync:allow-take-pending-tap`
+
+</td>
+<td>
+
+Enables the take_pending_tap command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`bg-sync:deny-take-pending-tap`
+
+</td>
+<td>
+
+Denies the take_pending_tap command without any pre-configured scope.
 
 </td>
 </tr>

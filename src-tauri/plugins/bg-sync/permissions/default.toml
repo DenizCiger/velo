@@ -1,12 +1,14 @@
 "$schema" = "schemas/schema.json"
 
 [default]
-description = "Allows controlling the background sync service and its helper settings screens."
+description = "Allows controlling the background sync service, posting new-mail notifications and opening the related settings screens."
 permissions = [
   "allow-start",
   "allow-stop",
   "allow-status",
   "allow-sync-done",
+  "allow-notify-new-mail",
+  "allow-take-pending-tap",
   "allow-request-ignore-battery-optimizations",
   "allow-open-notification-settings",
   "allow-open-autostart-settings",

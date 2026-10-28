@@ -6,6 +6,8 @@ const COMMANDS: &[&str] = &[
     "stop",
     "status",
     "sync_done",
+    "notify_new_mail",
+    "take_pending_tap",
     "request_ignore_battery_optimizations",
     "open_notification_settings",
     "open_autostart_settings",
