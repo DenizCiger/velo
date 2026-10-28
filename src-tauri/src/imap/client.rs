@@ -5,7 +5,7 @@ use mail_parser::{MessageParser, MimeHeaders};
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
-use tokio_native_tls::TlsStream;
+use super::tls::{build_tls_connector, TlsStream};
 
 use super::types::*;
 
@@ -66,7 +66,7 @@ impl Authenticator for XOAuth2 {
 
 /// Wrapper to unify TLS / plain streams so Session can be generic.
 pub(crate) enum ImapStream {
-    Tls(TlsStream<TcpStream>),
+    Tls(TlsStream),
     Plain(TcpStream),
 }
 
@@ -127,16 +127,7 @@ impl std::fmt::Debug for ImapStream {
 
 // ---------- TLS helper ----------
 
-/// Build a TLS connector, optionally accepting invalid certificates
-/// (for local mail bridges like ProtonMail Bridge with self-signed certs).
-fn build_tls_connector(accept_invalid_certs: bool) -> Result<native_tls::TlsConnector, String> {
-    let mut builder = native_tls::TlsConnector::builder();
-    if accept_invalid_certs {
-        builder.danger_accept_invalid_certs(true);
-        builder.danger_accept_invalid_hostnames(true);
-    }
-    builder.build().map_err(|e| format!("Failed to create TLS connector: {e}"))
-}
+// (see `super::tls::build_tls_connector`)
 
 // ---------- Public API ----------
 
@@ -1140,8 +1131,7 @@ async fn raw_connect_starttls(config: &ImapConfig) -> Result<ImapStream, String>
     if !resp.contains("OK") {
         return Err(format!("STARTTLS rejected: {resp}"));
     }
-    let nc = build_tls_connector(config.accept_invalid_certs)?;
-    let tc = tokio_native_tls::TlsConnector::from(nc);
+    let tc = build_tls_connector(config.accept_invalid_certs)?;
     let tls = tokio::time::timeout(TLS_HANDSHAKE_TIMEOUT, tc.connect(&config.host, tcp))
         .await
         .map_err(|_| format!(
@@ -1407,8 +1397,7 @@ async fn connect_stream(config: &ImapConfig) -> Result<ImapStream, String> {
 
     match config.security.as_str() {
         "tls" => {
-            let native_connector = build_tls_connector(config.accept_invalid_certs)?;
-            let tls_connector = tokio_native_tls::TlsConnector::from(native_connector);
+            let tls_connector = build_tls_connector(config.accept_invalid_certs)?;
             let tcp = tokio::time::timeout(TCP_CONNECT_TIMEOUT, TcpStream::connect(addr))
                 .await
                 .map_err(|_| format!(
@@ -1492,8 +1481,7 @@ async fn connect_starttls(config: &ImapConfig) -> Result<ImapSession, String> {
     }
 
     // Upgrade to TLS
-    let native_connector = build_tls_connector(config.accept_invalid_certs)?;
-    let tls_connector = tokio_native_tls::TlsConnector::from(native_connector);
+    let tls_connector = build_tls_connector(config.accept_invalid_certs)?;
     let tls = tokio::time::timeout(TLS_HANDSHAKE_TIMEOUT, tls_connector.connect(&config.host, tcp))
         .await
         .map_err(|_| format!(

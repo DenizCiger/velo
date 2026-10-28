@@ -19,32 +19,47 @@ tauri-build = { version = "2.5.4", features = [] }
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
-tauri = { version = "2.10.0", features = ["tray-icon", "devtools"] }
+tauri = { version = "2.10.0", features = ["devtools"] }
 tauri-plugin-log = "2"
 tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 tauri-plugin-notification = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
-tauri-plugin-single-instance = "2"
-tauri-plugin-autostart = "2"
-tauri-plugin-global-shortcut = "2"
 tauri-plugin-deep-link = "2"
 tauri-plugin-http = "2"
-tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 tauri-plugin-os = "2"
 tokio = { version = "1", features = ["net", "io-util", "sync", "macros", "rt", "time"] }
 futures = "0.3"
 async-imap = { version = "0.10", default-features = false, features = ["runtime-tokio"] }
-tokio-native-tls = "0.3"
-native-tls = "0.2"
 mail-parser = "0.9"
-lettre = { version = "0.11", default-features = false, features = ["smtp-transport", "tokio1-native-tls", "builder"] }
 base64 = "0.22"
 utf7-imap = "0.3"
 socket2 = "0.5"
+
+# Desktop-only: tray, single-instance, autostart, global shortcuts, updater,
+# and native-tls (system OpenSSL/Schannel/SecureTransport) for IMAP/SMTP/HTTP.
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri = { version = "2.10.0", features = ["tray-icon", "devtools"] }
+tauri-plugin-single-instance = "2"
+tauri-plugin-autostart = "2"
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-updater = "2"
+tokio-native-tls = "0.3"
+native-tls = "0.2"
+lettre = { version = "0.11", default-features = false, features = ["smtp-transport", "tokio1-native-tls", "builder"] }
 reqwest = { version = "0.12", default-features = false, features = ["native-tls", "json"] }
+
+# Mobile: rustls (ring + bundled Mozilla roots via webpki-roots) instead of
+# OpenSSL, which is painful to cross-compile and cannot read Android's
+# old-hash system CA store.
+[target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "logging", "tls12"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "logging", "tls12"] }
+webpki-roots = "1"
+lettre = { version = "0.11", default-features = false, features = ["smtp-transport", "tokio1-rustls-tls", "builder"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.58", features = ["Win32_UI_Shell"] }

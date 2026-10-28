@@ -2729,10 +2729,13 @@ dependencies = [
  "nom 8.0.0",
  "percent-encoding",
  "quoted_printable",
+ "rustls",
  "socket2 0.6.2",
  "tokio",
  "tokio-native-tls",
+ "tokio-rustls",
  "url",
+ "webpki-roots",
 ]
 
 [[package]]
@@ -4627,6 +4630,7 @@ version = "0.23.36"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c665f33d38cea657d9614f766881e4d510e0eda4239891eea56b4cadcf01801b"
 dependencies = [
+ "log",
  "once_cell",
  "ring",
  "rustls-pki-types",
@@ -6796,6 +6800,7 @@ dependencies = [
  "mail-parser",
  "native-tls",
  "reqwest 0.12.28",
+ "rustls",
  "serde",
  "serde_json",
  "socket2 0.5.10",
@@ -6817,8 +6822,10 @@ dependencies = [
  "tauri-plugin-updater",
  "tokio",
  "tokio-native-tls",
+ "tokio-rustls",
  "tray-item",
  "utf7-imap",
+ "webpki-roots",
  "windows 0.58.0",
 ]
 

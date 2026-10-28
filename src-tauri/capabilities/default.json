@@ -40,8 +40,12 @@
     {
       "identifier": "fs:scope",
       "allow": [
-        { "path": "$APPDATA" },
-        { "path": "$APPDATA/**" }
+        {
+          "path": "$APPDATA"
+        },
+        {
+          "path": "$APPDATA/**"
+        }
       ]
     },
     "core:window:allow-minimize",
@@ -51,27 +55,25 @@
     "core:window:allow-start-dragging",
     "core:window:allow-show",
     "core:window:allow-set-focus",
-    "autostart:default",
-    "autostart:allow-enable",
-    "autostart:allow-disable",
-    "autostart:allow-is-enabled",
-    "global-shortcut:default",
-    "global-shortcut:allow-register",
-    "global-shortcut:allow-unregister",
-    "global-shortcut:allow-unregister-all",
-    "global-shortcut:allow-is-registered",
     "deep-link:default",
     "core:window:allow-set-badge-count",
     {
       "identifier": "http:default",
       "allow": [
-        { "url": "http://*" },
-        { "url": "http://*/*" },
-        { "url": "https://*" },
-        { "url": "https://*/*" }
+        {
+          "url": "http://*"
+        },
+        {
+          "url": "http://*/*"
+        },
+        {
+          "url": "https://*"
+        },
+        {
+          "url": "https://*/*"
+        }
       ]
     },
-    "updater:default",
     "process:allow-restart",
     "os:default"
   ]

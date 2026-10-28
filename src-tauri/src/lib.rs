@@ -1,9 +1,10 @@
-#[cfg(not(target_os = "linux"))]
+#[cfg(all(desktop, not(target_os = "linux")))]
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{TrayIconBuilder, TrayIconId},
 };
 use tauri::{Emitter, Manager};
+#[cfg(desktop)]
 use tauri_plugin_autostart::MacosLauncher;
 
 mod commands;
@@ -24,18 +25,18 @@ fn close_splashscreen(app: tauri::AppHandle) {
 
 #[tauri::command]
 fn set_tray_tooltip(app: tauri::AppHandle, tooltip: String) -> Result<(), String> {
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(all(desktop, not(target_os = "linux")))]
     {
         let tray = app
             .tray_by_id(&TrayIconId::new("main-tray"))
             .ok_or_else(|| "Tray icon not found".to_string())?;
         tray.set_tooltip(Some(&tooltip)).map_err(|e| e.to_string())
     }
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", mobile))]
     {
         let _ = tooltip;
         let _ = app;
-        log::debug!("set_tray_tooltip is not supported on Linux (KSNI tray)");
+        log::debug!("set_tray_tooltip is not supported on this platform");
         Ok(())
     }
 }
@@ -60,7 +61,12 @@ pub fn run() {
         }
     }
 
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+
+    // Desktop-only plugins (no tray / single-instance / autostart / global
+    // shortcuts / self-updater on Android or iOS).
+    #[cfg(desktop)]
+    let builder = builder
         // Single instance MUST be first
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             if let Some(window) = app.get_webview_window("main") {
@@ -75,8 +81,11 @@ pub fn run() {
             MacosLauncher::LaunchAgent,
             Some(vec!["--hidden"]),
         ))
-        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_updater::Builder::new().build());
+
+    builder
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_sql::Builder::default().build())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
@@ -108,7 +117,6 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_http::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_os::init())
         .invoke_handler(tauri::generate_handler![
@@ -153,7 +161,7 @@ pub fn run() {
                 )?;
             }
 
-            #[cfg(not(target_os = "linux"))]
+            #[cfg(all(desktop, not(target_os = "linux")))]
             {
                 // Build system tray menu
                 let show = MenuItem::with_id(app, "show", "Show Velo", true, None::<&str>)?;
@@ -251,7 +259,7 @@ pub fn run() {
             // On Windows/Linux, remove decorations for custom titlebar.
             // macOS uses titleBarStyle: "overlay" from config instead, which
             // preserves native event routing in WKWebView.
-            #[cfg(not(target_os = "macos"))]
+            #[cfg(all(desktop, not(target_os = "macos")))]
             {
                 if let Some(window) = app.get_webview_window("main") {
                     let _ = window.set_decorations(false);
@@ -259,6 +267,7 @@ pub fn run() {
             }
 
             // Start hidden in tray if launched with --hidden (autostart)
+            #[cfg(desktop)]
             if std::env::args().any(|a| a == "--hidden") {
                 if let Some(window) = app.get_webview_window("main") {
                     let _ = window.hide();
@@ -271,9 +280,11 @@ pub fn run() {
 
             Ok(())
         })
-        .on_window_event(|window, event| {
+        .on_window_event(|_window, _event| {
             // Minimize to tray on close instead of quitting (main window only)
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+            #[cfg(desktop)]
+            if let tauri::WindowEvent::CloseRequested { api, .. } = _event {
+                let window = _window;
                 if window.label() == "main" {
                     let _ = window.hide();
                     api.prevent_close();
