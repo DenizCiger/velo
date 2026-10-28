@@ -1,12 +1,29 @@
 import Database from "@tauri-apps/plugin-sql";
+import { isMobilePlatform } from "@/utils/platform";
+
+const DB_URL = "sqlite:velo.db";
 
 let db: Database | null = null;
+let dbPromise: Promise<Database> | null = null;
 
 export async function getDb(): Promise<Database> {
-  if (!db) {
-    db = await Database.load("sqlite:velo.db");
+  if (db) return db;
+  // Share one in-flight load between concurrent first callers
+  if (!dbPromise) {
+    dbPromise = (async () => {
+      // Mobile: use the single-connection pool that src-tauri/src/db_pool.rs
+      // installs over the preloaded DB. `load()` would replace it with a
+      // default multi-connection pool, on which BEGIN/COMMIT sent as separate
+      // calls can hit different connections ("database is locked").
+      const instance = isMobilePlatform() ? Database.get(DB_URL) : await Database.load(DB_URL);
+      db = instance;
+      return instance;
+    })();
+    dbPromise.catch(() => {
+      dbPromise = null;
+    });
   }
-  return db;
+  return dbPromise;
 }
 
 /**

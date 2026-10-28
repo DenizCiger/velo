@@ -10,6 +10,8 @@ use tauri::Manager;
 use tauri_plugin_autostart::MacosLauncher;
 
 mod commands;
+#[cfg(mobile)]
+mod db_pool;
 mod imap;
 mod oauth;
 mod smtp;
@@ -91,9 +93,16 @@ pub fn run() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build());
 
-    builder
+    let builder = builder
         .plugin(tauri_plugin_deep_link::init())
-        .plugin(tauri_plugin_sql::Builder::default().build())
+        .plugin(tauri_plugin_sql::Builder::default().build());
+
+    // Must come right after the SQL plugin: swaps its preloaded pool for a
+    // single-connection one before any webview runs a query.
+    #[cfg(mobile)]
+    let builder = builder.plugin(db_pool::init());
+
+    builder
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
         // WebKitGTK refuses to run the parent's click handler inside the sandboxed
