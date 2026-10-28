@@ -433,7 +433,11 @@ body {
 }
 
 /* Native <select> popups (WebKitGTK) ignore the translucent theme colors */
+/* Opaque equivalents of --color-bg-tertiary / --color-text-primary / --color-bg-selected */
 .dark select option {
-  background-color: #1e293b;
-  color: #e5e7eb;
+  background-color: #283148;
+  color: #f8fafc;
+}
+.dark select option:checked {
+  background-color: #2b3b66;
 }
