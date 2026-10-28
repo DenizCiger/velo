@@ -367,6 +367,11 @@ export default function App() {
         // Must run now, while the app is in the foreground.
         await initBackgroundSync().catch((err) => console.warn("Background sync init failed:", err));
 
+        // Emulator test hooks (fake account/mail). Compiled out unless built with VITE_VELO_DEV_HOOKS=1.
+        if (__VELO_DEV_HOOKS__) {
+          import("./services/backgroundSync/devHooks").then((m) => m.installDevHooks()).catch(() => {});
+        }
+
         // Initialize global compose shortcut
         await initGlobalShortcut();
 
